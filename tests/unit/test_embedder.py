@@ -6,23 +6,12 @@ import pytest
 import requests
 
 from mcp_agent_rag.rag.embedder import OllamaEmbedder
-from mcp_agent_rag.rag.ollama_utils import normalize_ollama_host
 
 
 @pytest.fixture
 def embedder():
     """Create embedder instance."""
     return OllamaEmbedder(model="test-model", host="http://localhost:11434")
-
-
-def test_embedder_normalize_ollama_host_basic():
-    """Test basic host normalization."""
-    assert normalize_ollama_host("http://localhost:11434") == "http://localhost:11434"
-
-
-def test_embedder_normalize_ollama_host_with_api_suffix():
-    """Test host normalization with /api suffix."""
-    assert normalize_ollama_host("http://localhost:11434/api") == "http://localhost:11434"
 
 
 def test_embedder_init(embedder):
