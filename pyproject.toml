@@ -1,0 +1,76 @@
+[build-system]
+requires = ["setuptools>=65.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "mcp-agent-rag"
+version = "0.1.0"
+description = "Model Context Protocol server implementing retrieval-augmented generation (RAG)"
+readme = "README.md"
+requires-python = ">=3.10"
+license = {text = "MIT"}
+authors = [
+    {name = "MCP-RAG Team"}
+]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+]
+dependencies = [
+    "agno>=0.1.0",
+    "faiss-cpu>=1.7.4",
+    "numpy>=1.24.0",
+    "requests>=2.31.0",
+    "pypdf>=3.17.0",
+    "python-docx>=1.1.0",
+    "openpyxl>=3.1.0",
+    "python-pptx>=0.6.23",
+    "odfpy>=1.4.1",
+    "beautifulsoup4>=4.12.0",
+    "chardet>=5.2.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=7.4.0",
+    "pytest-cov>=4.1.0",
+    "pytest-asyncio>=0.21.0",
+    "ruff>=0.1.0",
+]
+
+[project.scripts]
+mcp-rag = "mcp_agent_rag.cli:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+python_classes = ["Test*"]
+python_functions = ["test_*"]
+addopts = "--strict-markers --cov=src/mcp_agent_rag --cov-report=xml --cov-report=term-missing"
+
+[tool.coverage.run]
+source = ["src/mcp_agent_rag"]
+omit = ["*/tests/*", "*/test_*.py"]
+
+[tool.coverage.report]
+fail_under = 90
+precision = 2
+show_missing = true
+
+[tool.ruff]
+line-length = 100
+target-version = "py310"
+select = ["E", "F", "I", "N", "W", "UP"]
+ignore = []
+
+[tool.ruff.per-file-ignores]
+"__init__.py" = ["F401"]
