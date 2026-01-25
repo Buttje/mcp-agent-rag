@@ -79,10 +79,9 @@ class OllamaGenerator:
                 logger.info("Using /api/chat endpoint (detected via test request)")
                 return
         except requests.exceptions.Timeout:
-            # Timeout is okay, means endpoint exists but is slow
-            self._api_mode = "chat"
-            logger.info("Using /api/chat endpoint (endpoint exists)")
-            return
+            # Timeout could be network issue, not necessarily endpoint availability
+            # Fall through to use generate endpoint as safe default
+            logger.debug("Timeout testing /api/chat, falling back to /api/generate")
         except Exception as e:
             logger.debug(f"Could not test /api/chat: {e}")
 
