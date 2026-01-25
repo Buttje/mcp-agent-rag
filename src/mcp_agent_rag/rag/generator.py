@@ -1,5 +1,6 @@
 """Chat generation utilities using Ollama."""
 
+import json
 
 import requests
 
@@ -102,7 +103,6 @@ class OllamaGenerator:
 
             for line in response.iter_lines():
                 if line:
-                    import json
                     data = json.loads(line)
                     if "response" in data:
                         yield data["response"]
