@@ -1,7 +1,5 @@
 """Additional tests for database manager to improve coverage."""
 
-import signal
-from pathlib import Path
 from unittest.mock import Mock, patch
 
 import pytest
@@ -29,7 +27,9 @@ def test_add_documents_with_url(db_manager, test_config):
         with patch.object(db_manager.embedder, "embed") as mock_embed:
             mock_embed.return_value = [[0.1] * 768]
 
-            with patch("mcp_agent_rag.rag.extractor.DocumentExtractor.extract_text") as mock_extract:
+            with patch(
+                "mcp_agent_rag.rag.extractor.DocumentExtractor.extract_text"
+            ) as mock_extract:
                 mock_extract.return_value = "Test content"
 
                 stats = db_manager.add_documents(
@@ -167,7 +167,7 @@ def test_load_database_error(db_manager, test_config, temp_dir):
 
 def test_add_documents_no_variable_shadowing(db_manager, test_config, sample_text_file):
     """Test that chunk_text function is not shadowed by loop variable.
-    
+
     This is a regression test for a bug where the chunk_text loop variable
     shadowed the imported chunk_text function, causing:
     'cannot access local variable chunk_text where it is not associated with a value'
@@ -186,7 +186,7 @@ def test_add_documents_no_variable_shadowing(db_manager, test_config, sample_tex
         # Verify the document was processed successfully
         assert stats["processed"] == 1
         assert stats["failed"] == 0
-        
+
         # Verify embedder was called with proper chunks
         assert mock_embed.called
         call_args = mock_embed.call_args[0][0]
