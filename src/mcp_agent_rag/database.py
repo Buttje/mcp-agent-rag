@@ -232,11 +232,12 @@ class DatabaseManager:
         Returns:
             Formatted size string
         """
-        for unit in ["B", "KB", "MB", "GB"]:
-            if size_bytes < 1024.0:
-                return f"{size_bytes:.1f} {unit}"
-            size_bytes /= 1024.0
-        return f"{size_bytes:.1f} TB"
+        size = float(size_bytes)
+        for unit in ["B", "KB", "MB", "GB", "TB"]:
+            if size < 1024.0 or unit == "TB":
+                return f"{size:.1f} {unit}"
+            size /= 1024.0
+        return f"{size:.1f} TB"
 
     def _download_url(self, url: str) -> Path:
         """Download file from URL.
