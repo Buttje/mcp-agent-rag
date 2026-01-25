@@ -47,6 +47,7 @@ dev = [
 
 [project.scripts]
 mcp-rag = "mcp_agent_rag.cli:main"
+mcp-rag-chat = "mcp_agent_rag.chat:main"
 
 [tool.setuptools.packages.find]
 where = ["src"]
