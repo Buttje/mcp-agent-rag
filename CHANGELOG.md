@@ -8,12 +8,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Fixed
-- Updated Ollama API integration to use `/api/chat` endpoint instead of deprecated `/api/generate` endpoint (removed in Ollama 0.4.0)
-- Fixed 404 errors when connecting to Ollama server with version 0.4.0 or later
+- Fixed 404/405 errors when connecting to Ollama server by adding automatic API version detection
+- Added fallback support for older Ollama versions (< 0.1.14) that don't have the `/api/chat` endpoint
+- Now automatically detects Ollama version and uses appropriate endpoint:
+  - `/api/chat` with messages format for Ollama v0.1.14+ (modern)
+  - `/api/generate` with prompt format for older Ollama versions (legacy)
+- Improved error handling and logging for Ollama API connection issues
 
 ### Changed
-- Refactored request format from single prompt string to messages array for better compatibility with Ollama's chat API
-- Context is now passed as a system message instead of being concatenated to the prompt
+- Refactored OllamaGenerator to dynamically detect and adapt to Ollama server version
+- Added automatic endpoint detection using `/api/version` and fallback testing
+- Enhanced compatibility with both old and new Ollama installations
 
 ## [0.1.0] - 2024-01-XX
 
