@@ -1,6 +1,5 @@
 """Chat generation utilities using Ollama."""
 
-from typing import Optional
 
 import requests
 
@@ -27,7 +26,7 @@ class OllamaGenerator:
         self.host = host.rstrip("/")
         self.generate_url = f"{self.host}/api/generate"
 
-    def generate(self, prompt: str, context: str = "") -> Optional[str]:
+    def generate(self, prompt: str, context: str = "") -> str | None:
         """Generate a response for the given prompt.
 
         Args:
