@@ -26,7 +26,7 @@ class OllamaGenerator:
         """
         self.model = model
         self.host = normalize_ollama_host(host)
-        self.generate_url = f"{self.host}/api/generate"
+        self.generate_url = f"{self.host}/api/chat"
 
     def generate(self, prompt: str, context: str = "") -> str | None:
         """Generate a response for the given prompt.
@@ -39,14 +39,21 @@ class OllamaGenerator:
             Generated response or None if failed
         """
         try:
-            # Build full prompt with context if provided
-            full_prompt = prompt
+            # Build messages array with context if provided
+            messages = []
             if context:
-                full_prompt = f"Context:\n{context}\n\nQuestion: {prompt}\n\nAnswer:"
+                messages.append({
+                    "role": "system",
+                    "content": f"Context:\n{context}\n\nUse the above context to answer the following question."
+                })
+            messages.append({
+                "role": "user",
+                "content": prompt
+            })
 
             payload = {
                 "model": self.model,
-                "prompt": full_prompt,
+                "messages": messages,
                 "stream": False,
             }
 
@@ -59,8 +66,8 @@ class OllamaGenerator:
 
             result = response.json()
 
-            if "response" in result:
-                return result["response"]
+            if "message" in result and "content" in result["message"]:
+                return result["message"]["content"]
             else:
                 logger.error(f"Unexpected response format from Ollama: {result}")
                 return None
@@ -83,14 +90,21 @@ class OllamaGenerator:
             Response chunks as they arrive
         """
         try:
-            # Build full prompt with context if provided
-            full_prompt = prompt
+            # Build messages array with context if provided
+            messages = []
             if context:
-                full_prompt = f"Context:\n{context}\n\nQuestion: {prompt}\n\nAnswer:"
+                messages.append({
+                    "role": "system",
+                    "content": f"Context:\n{context}\n\nUse the above context to answer the following question."
+                })
+            messages.append({
+                "role": "user",
+                "content": prompt
+            })
 
             payload = {
                 "model": self.model,
-                "prompt": full_prompt,
+                "messages": messages,
                 "stream": True,
             }
 
@@ -105,8 +119,8 @@ class OllamaGenerator:
             for line in response.iter_lines():
                 if line:
                     data = json.loads(line)
-                    if "response" in data:
-                        yield data["response"]
+                    if "message" in data and "content" in data["message"]:
+                        yield data["message"]["content"]
                     if data.get("done", False):
                         break
 
