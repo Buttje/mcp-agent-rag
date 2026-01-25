@@ -92,7 +92,7 @@ class DocumentExtractor:
                 return f.read()
         except Exception as e:
             logger.error(f"Error reading text file {file_path}: {e}")
-            return ""
+            return None
 
     @staticmethod
     def _extract_docx(file_path: Path) -> str:
