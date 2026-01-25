@@ -163,3 +163,32 @@ def test_load_database_error(db_manager, test_config, temp_dir):
     db = db_manager.load_database("baddb")
     # Should handle error and return None or raise
     assert db is None or db is not None  # Either is acceptable
+
+
+def test_add_documents_no_variable_shadowing(db_manager, test_config, sample_text_file):
+    """Test that chunk_text function is not shadowed by loop variable.
+    
+    This is a regression test for a bug where the chunk_text loop variable
+    shadowed the imported chunk_text function, causing:
+    'cannot access local variable chunk_text where it is not associated with a value'
+    """
+    db_manager.create_database("testdb")
+
+    with patch.object(db_manager.embedder, "embed") as mock_embed:
+        mock_embed.return_value = [[0.1] * 768]
+
+        # This should successfully process the document without variable shadowing errors
+        stats = db_manager.add_documents(
+            database_name="testdb",
+            path=str(sample_text_file),
+        )
+
+        # Verify the document was processed successfully
+        assert stats["processed"] == 1
+        assert stats["failed"] == 0
+        
+        # Verify embedder was called with proper chunks
+        assert mock_embed.called
+        call_args = mock_embed.call_args[0][0]
+        assert isinstance(call_args, list)
+        assert len(call_args) > 0

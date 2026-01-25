@@ -175,8 +175,8 @@ class DatabaseManager:
 
                     # Add to vector database with chunk text in metadata
                     chunk_metadata = []
-                    for chunk_text, meta in chunks:
-                        meta["text"] = chunk_text
+                    for text_chunk, meta in chunks:
+                        meta["text"] = text_chunk
                         chunk_metadata.append(meta)
                     vector_db.add(embeddings, chunk_metadata)
                     vector_db.increment_doc_count()
