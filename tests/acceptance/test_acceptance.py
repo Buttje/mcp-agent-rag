@@ -276,9 +276,3 @@ class TestCoverage:
         fail_under = coverage_config.get("fail_under", 0)
 
         assert fail_under >= 80, "Coverage threshold should be at least 80%"
-
-
-def patch(*args, **kwargs):
-    """Import patch from unittest.mock - REMOVED, use direct imports."""
-    from unittest.mock import patch as _patch
-    return _patch(*args, **kwargs)
