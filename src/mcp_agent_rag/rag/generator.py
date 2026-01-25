@@ -28,6 +28,28 @@ class OllamaGenerator:
         self.host = normalize_ollama_host(host)
         self.generate_url = f"{self.host}/api/chat"
 
+    def _build_messages(self, prompt: str, context: str = "") -> list[dict]:
+        """Build messages array for chat API.
+
+        Args:
+            prompt: User prompt
+            context: Additional context to include
+
+        Returns:
+            List of message objects
+        """
+        messages = []
+        if context:
+            messages.append({
+                "role": "system",
+                "content": f"Context:\n{context}\n\nUse the above context to answer the following question."
+            })
+        messages.append({
+            "role": "user",
+            "content": prompt
+        })
+        return messages
+
     def generate(self, prompt: str, context: str = "") -> str | None:
         """Generate a response for the given prompt.
 
@@ -39,17 +61,7 @@ class OllamaGenerator:
             Generated response or None if failed
         """
         try:
-            # Build messages array with context if provided
-            messages = []
-            if context:
-                messages.append({
-                    "role": "system",
-                    "content": f"Context:\n{context}\n\nUse the above context to answer the following question."
-                })
-            messages.append({
-                "role": "user",
-                "content": prompt
-            })
+            messages = self._build_messages(prompt, context)
 
             payload = {
                 "model": self.model,
@@ -90,17 +102,7 @@ class OllamaGenerator:
             Response chunks as they arrive
         """
         try:
-            # Build messages array with context if provided
-            messages = []
-            if context:
-                messages.append({
-                    "role": "system",
-                    "content": f"Context:\n{context}\n\nUse the above context to answer the following question."
-                })
-            messages.append({
-                "role": "user",
-                "content": prompt
-            })
+            messages = self._build_messages(prompt, context)
 
             payload = {
                 "model": self.model,
