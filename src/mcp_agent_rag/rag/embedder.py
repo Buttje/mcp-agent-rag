@@ -5,6 +5,7 @@ from typing import List, Optional
 
 import requests
 
+from mcp_agent_rag.rag.ollama_utils import normalize_ollama_host
 from mcp_agent_rag.utils import get_logger
 
 logger = get_logger(__name__)
@@ -25,7 +26,7 @@ class OllamaEmbedder:
             host: Ollama host URL
         """
         self.model = model
-        self.host = host.rstrip("/")
+        self.host = normalize_ollama_host(host)
         self.embed_url = f"{self.host}/api/embed"
 
     def embed(self, texts: List[str]) -> Optional[List[List[float]]]:

@@ -4,6 +4,7 @@ import json
 
 import requests
 
+from mcp_agent_rag.rag.ollama_utils import normalize_ollama_host
 from mcp_agent_rag.utils import get_logger
 
 logger = get_logger(__name__)
@@ -24,7 +25,7 @@ class OllamaGenerator:
             host: Ollama host URL
         """
         self.model = model
-        self.host = host.rstrip("/")
+        self.host = normalize_ollama_host(host)
         self.generate_url = f"{self.host}/api/generate"
 
     def generate(self, prompt: str, context: str = "") -> str | None:
