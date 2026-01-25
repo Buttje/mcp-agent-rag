@@ -54,35 +54,40 @@ def test_generator_init(generator):
     """Test generator initialization."""
     assert generator.model == "test-model"
     assert generator.host == "http://localhost:11434"
-    assert "api/generate" in generator.generate_url
+    assert "api/chat" in generator.generate_url
 
 
 def test_generator_init_with_api_suffix():
     """Test generator initialization with /api suffix in host."""
     gen = OllamaGenerator(model="test-model", host="http://localhost:11434/api")
     assert gen.host == "http://localhost:11434"
-    assert gen.generate_url == "http://localhost:11434/api/generate"
+    assert gen.generate_url == "http://localhost:11434/api/chat"
 
 
 def test_generator_init_with_trailing_slash():
     """Test generator initialization with trailing slash in host."""
     gen = OllamaGenerator(model="test-model", host="http://localhost:11434/")
     assert gen.host == "http://localhost:11434"
-    assert gen.generate_url == "http://localhost:11434/api/generate"
+    assert gen.generate_url == "http://localhost:11434/api/chat"
 
 
 def test_generator_init_with_api_and_slash():
     """Test generator initialization with /api/ in host."""
     gen = OllamaGenerator(model="test-model", host="http://localhost:11434/api/")
     assert gen.host == "http://localhost:11434"
-    assert gen.generate_url == "http://localhost:11434/api/generate"
+    assert gen.generate_url == "http://localhost:11434/api/chat"
 
 
 def test_generate_success(generator):
     """Test successful generation."""
     with patch("requests.post") as mock_post:
         mock_response = Mock()
-        mock_response.json.return_value = {"response": "Test response"}
+        mock_response.json.return_value = {
+            "message": {
+                "role": "assistant",
+                "content": "Test response"
+            }
+        }
         mock_response.raise_for_status = Mock()
         mock_post.return_value = mock_response
 
@@ -90,13 +95,23 @@ def test_generate_success(generator):
 
         assert response == "Test response"
         mock_post.assert_called_once()
+        
+        # Verify the new API format is used
+        call_args = mock_post.call_args
+        assert "messages" in call_args[1]["json"]
+        assert isinstance(call_args[1]["json"]["messages"], list)
 
 
 def test_generate_with_context(generator):
     """Test generation with context."""
     with patch("requests.post") as mock_post:
         mock_response = Mock()
-        mock_response.json.return_value = {"response": "Test response"}
+        mock_response.json.return_value = {
+            "message": {
+                "role": "assistant",
+                "content": "Test response"
+            }
+        }
         mock_response.raise_for_status = Mock()
         mock_post.return_value = mock_response
 
@@ -105,7 +120,13 @@ def test_generate_with_context(generator):
         assert response == "Test response"
         # Verify context was included in the call
         call_args = mock_post.call_args
-        assert "Context:" in call_args[1]["json"]["prompt"]
+        messages = call_args[1]["json"]["messages"]
+        # With context, we should have 2 messages: system + user
+        assert len(messages) == 2
+        assert messages[0]["role"] == "system"
+        assert "test context" in messages[0]["content"]
+        assert messages[1]["role"] == "user"
+        assert messages[1]["content"] == "test prompt"
 
 
 def test_generate_connection_error(generator):
@@ -139,9 +160,9 @@ def test_generate_stream_success(generator):
     with patch("requests.post") as mock_post:
         mock_response = Mock()
         mock_response.iter_lines.return_value = [
-            b'{"response": "Hello ", "done": false}',
-            b'{"response": "world", "done": false}',
-            b'{"response": "!", "done": true}',
+            b'{"message": {"role": "assistant", "content": "Hello "}, "done": false}',
+            b'{"message": {"role": "assistant", "content": "world"}, "done": false}',
+            b'{"message": {"role": "assistant", "content": "!"}, "done": true}',
         ]
         mock_response.raise_for_status = Mock()
         mock_post.return_value = mock_response
@@ -157,7 +178,7 @@ def test_generate_stream_with_context(generator):
     with patch("requests.post") as mock_post:
         mock_response = Mock()
         mock_response.iter_lines.return_value = [
-            b'{"response": "Test", "done": true}',
+            b'{"message": {"role": "assistant", "content": "Test"}, "done": true}',
         ]
         mock_response.raise_for_status = Mock()
         mock_post.return_value = mock_response
@@ -167,7 +188,11 @@ def test_generate_stream_with_context(generator):
         # Verify context was included
         call_args = mock_post.call_args
         assert call_args[1]["json"]["stream"] is True
-        assert "Context:" in call_args[1]["json"]["prompt"]
+        messages = call_args[1]["json"]["messages"]
+        # With context, we should have 2 messages: system + user
+        assert len(messages) == 2
+        assert messages[0]["role"] == "system"
+        assert "test context" in messages[0]["content"]
 
 
 def test_generate_stream_connection_error(generator):
