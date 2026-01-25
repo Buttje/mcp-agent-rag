@@ -126,7 +126,7 @@ class DatabaseManager:
                 )
 
             total_files = len(files)
-            logger.info(f"{total_files} files to process")
+            logger.info(f"About to add {total_files} document(s)")
 
             for i, file_path in enumerate(files, 1):
                 if self._skip_current:
@@ -135,7 +135,18 @@ class DatabaseManager:
                     self._skip_current = False
                     continue
 
-                logger.info(f"Processing {i} of {total_files}: {file_path}")
+                # Get file size
+                try:
+                    file_size = Path(file_path).stat().st_size
+                    file_size_str = self._format_size(file_size)
+                except Exception:
+                    file_size_str = "unknown size"
+
+                remaining = total_files - i
+                logger.info(
+                    f"Processing: {Path(file_path).name} ({file_size_str}) - "
+                    f"{remaining} document(s) remaining"
+                )
 
                 try:
                     # Extract text
@@ -211,6 +222,22 @@ class DatabaseManager:
     def _skip_handler(self, signum, frame):
         """Handle Ctrl+K to skip current file."""
         self._skip_current = True
+
+    def _format_size(self, size_bytes: int) -> str:
+        """Format file size in human-readable format.
+
+        Args:
+            size_bytes: Size in bytes
+
+        Returns:
+            Formatted size string
+        """
+        size = float(size_bytes)
+        for unit in ["B", "KB", "MB", "GB", "TB"]:
+            if size < 1024.0 or unit == "TB":
+                return f"{size:.1f} {unit}"
+            size /= 1024.0
+        return f"{size:.1f} TB"
 
     def _download_url(self, url: str) -> Path:
         """Download file from URL.

@@ -76,3 +76,14 @@ def test_load_multiple_databases(db_manager, test_config, temp_dir):
     assert len(loaded) == 2
     assert "db1" in loaded
     assert "db2" in loaded
+
+
+def test_format_size(db_manager):
+    """Test file size formatting."""
+    assert db_manager._format_size(0) == "0.0 B"
+    assert db_manager._format_size(512) == "512.0 B"
+    assert db_manager._format_size(1024) == "1.0 KB"
+    assert db_manager._format_size(1536) == "1.5 KB"
+    assert db_manager._format_size(1048576) == "1.0 MB"
+    assert db_manager._format_size(1073741824) == "1.0 GB"
+    assert db_manager._format_size(1099511627776) == "1.0 TB"
