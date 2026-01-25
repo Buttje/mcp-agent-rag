@@ -4,28 +4,10 @@ import json
 
 import requests
 
+from mcp_agent_rag.rag.ollama_utils import normalize_ollama_host
 from mcp_agent_rag.utils import get_logger
 
 logger = get_logger(__name__)
-
-
-def normalize_ollama_host(host: str) -> str:
-    """Normalize Ollama host URL.
-    
-    Args:
-        host: Ollama host URL
-        
-    Returns:
-        Normalized host URL without /api suffix or trailing slashes
-    """
-    # Strip whitespace
-    host = host.strip()
-    # Remove trailing slashes
-    host = host.rstrip("/")
-    # Remove /api suffix if present to avoid double /api/api/ in URLs
-    if host.endswith("/api"):
-        host = host[:-4]
-    return host
 
 
 class OllamaGenerator:

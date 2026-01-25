@@ -5,7 +5,8 @@ from unittest.mock import Mock, patch
 import pytest
 import requests
 
-from mcp_agent_rag.rag.generator import OllamaGenerator, normalize_ollama_host
+from mcp_agent_rag.rag.generator import OllamaGenerator
+from mcp_agent_rag.rag.ollama_utils import normalize_ollama_host
 
 
 @pytest.fixture
