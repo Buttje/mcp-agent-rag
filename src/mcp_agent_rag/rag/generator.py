@@ -32,7 +32,7 @@ class OllamaGenerator:
 
     def _detect_api_mode(self):
         """Detect which API mode to use based on Ollama version.
-        
+
         Tries /api/chat first (v0.1.14+), falls back to /api/generate for older versions.
         """
         # First, try to get version info
@@ -46,8 +46,14 @@ class OllamaGenerator:
                 try:
                     parts = version.split(".")
                     if len(parts) >= 3:
-                        major, minor, patch = int(parts[0]), int(parts[1]), int(parts[2].split("-")[0])
-                        if major > 0 or (major == 0 and minor > 1) or (major == 0 and minor == 1 and patch >= 14):
+                        major = int(parts[0])
+                        minor = int(parts[1])
+                        patch = int(parts[2].split("-")[0])
+                        if (
+                            major > 0
+                            or (major == 0 and minor > 1)
+                            or (major == 0 and minor == 1 and patch >= 14)
+                        ):
                             self._api_mode = "chat"
                             logger.info("Using /api/chat endpoint")
                             return
@@ -55,7 +61,7 @@ class OllamaGenerator:
                     logger.warning(f"Could not parse version: {version}")
         except Exception as e:
             logger.debug(f"Could not get Ollama version: {e}")
-        
+
         # Try /api/chat endpoint directly
         try:
             test_payload = {
@@ -79,7 +85,7 @@ class OllamaGenerator:
             return
         except Exception as e:
             logger.debug(f"Could not test /api/chat: {e}")
-        
+
         # Fall back to /api/generate for older versions
         self._api_mode = "generate"
         logger.info("Using /api/generate endpoint (fallback for older Ollama versions)")
@@ -106,7 +112,10 @@ class OllamaGenerator:
         if context:
             messages.append({
                 "role": "system",
-                "content": f"Context:\n{context}\n\nUse the above context to answer the following question."
+                "content": (
+                    f"Context:\n{context}\n\n"
+                    "Use the above context to answer the following question."
+                ),
             })
         messages.append({
             "role": "user",
@@ -116,26 +125,30 @@ class OllamaGenerator:
 
     def _build_prompt_text(self, prompt: str, context: str = "") -> str:
         """Build a single prompt string for /api/generate.
-        
+
         Args:
             prompt: User prompt
             context: Additional context to include
-            
+
         Returns:
             Formatted prompt string
         """
         if context:
-            return f"Context:\n{context}\n\nUse the above context to answer the following question.\n\nQuestion: {prompt}"
+            return (
+                f"Context:\n{context}\n\n"
+                "Use the above context to answer the following question.\n\n"
+                f"Question: {prompt}"
+            )
         return prompt
 
     def _build_payload(self, prompt: str, context: str = "", stream: bool = False) -> dict:
         """Build the request payload based on API mode.
-        
+
         Args:
             prompt: User prompt
             context: Additional context to include
             stream: Whether to stream the response
-            
+
         Returns:
             Request payload dictionary
         """
@@ -156,7 +169,10 @@ class OllamaGenerator:
             }
             # Add system message if context is provided
             if context:
-                payload["system"] = "You are a helpful assistant. Use the provided context to answer questions accurately."
+                payload["system"] = (
+                    "You are a helpful assistant. "
+                    "Use the provided context to answer questions accurately."
+                )
             return payload
 
     def generate(self, prompt: str, context: str = "") -> str | None:
@@ -189,7 +205,7 @@ class OllamaGenerator:
                 # For /api/generate, response is in "response" field
                 if "response" in result:
                     return result["response"]
-            
+
             logger.error(f"Unexpected response format from Ollama: {result}")
             return None
 
@@ -224,7 +240,7 @@ class OllamaGenerator:
             for line in response.iter_lines():
                 if line:
                     data = json.loads(line)
-                    
+
                     # Handle response based on API mode
                     if self._api_mode == "chat":
                         if "message" in data and "content" in data["message"]:
@@ -233,7 +249,7 @@ class OllamaGenerator:
                         # For /api/generate, response chunk is in "response" field
                         if "response" in data:
                             yield data["response"]
-                    
+
                     if data.get("done", False):
                         break
 

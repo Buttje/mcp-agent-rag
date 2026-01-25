@@ -18,7 +18,7 @@ def mock_api_detection():
         mock_version_response.status_code = 200
         mock_version_response.json.return_value = {"version": "0.1.14"}
         mock_get.return_value = mock_version_response
-        
+
         yield mock_get, mock_post
 
 
@@ -36,12 +36,12 @@ def generator_legacy():
         mock_version_response = Mock()
         mock_version_response.status_code = 404  # Old Ollama doesn't have /api/version
         mock_get.return_value = mock_version_response
-        
+
         # Mock /api/chat test to return 404
         mock_chat_response = Mock()
         mock_chat_response.status_code = 404
         mock_post.return_value = mock_chat_response
-        
+
         gen = OllamaGenerator(model="test-model", host="http://localhost:11434")
         yield gen
 
@@ -133,7 +133,7 @@ def test_generate_success(generator):
 
         assert response == "Test response"
         mock_post.assert_called_once()
-        
+
         # Verify the new API format is used
         call_args = mock_post.call_args
         assert "messages" in call_args[1]["json"]
@@ -270,7 +270,7 @@ def test_generate_legacy_mode(generator_legacy):
 
         assert response == "Legacy response"
         mock_post.assert_called_once()
-        
+
         # Verify the legacy API format is used (prompt instead of messages)
         call_args = mock_post.call_args
         assert "prompt" in call_args[1]["json"]
@@ -303,7 +303,7 @@ def test_api_mode_detection_new_version():
         mock_version_response.status_code = 200
         mock_version_response.json.return_value = {"version": "0.2.0"}
         mock_get.return_value = mock_version_response
-        
+
         gen = OllamaGenerator(model="test-model", host="http://localhost:11434")
         assert gen._api_mode == "chat"
 
@@ -315,7 +315,7 @@ def test_api_mode_detection_boundary_version():
         mock_version_response.status_code = 200
         mock_version_response.json.return_value = {"version": "0.1.14"}
         mock_get.return_value = mock_version_response
-        
+
         gen = OllamaGenerator(model="test-model", host="http://localhost:11434")
         assert gen._api_mode == "chat"
 
@@ -327,11 +327,11 @@ def test_api_mode_detection_old_version():
         mock_version_response.status_code = 200
         mock_version_response.json.return_value = {"version": "0.1.13"}
         mock_get.return_value = mock_version_response
-        
+
         # Mock /api/chat test to return 404
         mock_chat_response = Mock()
         mock_chat_response.status_code = 404
         mock_post.return_value = mock_chat_response
-        
+
         gen = OllamaGenerator(model="test-model", host="http://localhost:11434")
         assert gen._api_mode == "generate"
