@@ -8,6 +8,7 @@ A Python implementation of a Model Context Protocol (MCP) server that provides r
 - **Smart RAG Pipeline**: Automatic text extraction, cleaning, chunking with overlap, and embedding generation
 - **Vector Database**: FAISS-based indexing with metadata persistence
 - **Agentic RAG**: Intelligent context retrieval with deduplication and citation tracking
+- **Interactive Chat Client**: Built-in CLI chat interface for natural conversations with your documents
 - **MCP Compliance**: Full JSON-RPC server implementing Model Context Protocol
 - **CLI Interface**: Easy-to-use command-line tools for database and server management
 - **Cross-Platform**: Works on Windows 10/11 and Ubuntu 22.04 LTS
@@ -85,6 +86,60 @@ mcp-rag database list
 
 ```bash
 mcp-rag server start --active-databases mydb --transport stdio
+```
+
+### Interactive Chat Client
+
+Start an interactive chat session with your documents:
+
+```bash
+mcp-rag-chat
+```
+
+The chat client will:
+1. Display all available databases
+2. Let you select which database to use
+3. Start an interactive chat session where you can ask questions
+4. Retrieve relevant context from your documents
+5. Generate answers using Ollama with citations
+
+**Chat Commands:**
+- Type your questions naturally
+- `quit`, `exit`, or `/q` to exit
+- `Ctrl+C` to interrupt
+
+**Example Session:**
+```
+$ mcp-rag-chat
+
+======================================================================
+MCP-RAG Chat Client
+======================================================================
+
+Available databases:
+  1. mydb (42 documents)
+     My document collection
+
+Select database (number or name, or 'q' to quit): 1
+
+Loading database: mydb
+Using model: mistral:7b-instruct
+
+Chat started! Type your questions below.
+Commands: 'quit', 'exit', '/q' to exit
+======================================================================
+
+You: What is Python used for?
+Searching...
+Assistant: Python is used for web development, data analysis, machine learning, 
+automation, and scientific computing. Popular frameworks include Django for web 
+development, NumPy for numerical computing, and TensorFlow for machine learning.
+
+Sources:
+  - /path/to/python-intro.txt
+
+You: quit
+Goodbye!
 ```
 
 ## MCP Tools
