@@ -2,6 +2,7 @@
 
 from pathlib import Path
 
+import pypdf
 import pytest
 
 from mcp_agent_rag.rag.extractor import DocumentExtractor, find_files_to_process
@@ -89,3 +90,36 @@ def test_find_files_respect_gitignore(sample_project_dir):
 
     # .pyc should be ignored
     assert not any(f.suffix == ".pyc" for f in files)
+
+
+def test_extract_encrypted_pdf(temp_dir):
+    """Test extracting text from encrypted PDF file.
+    
+    This test verifies that the cryptography package is properly installed
+    and that encrypted PDFs can be processed without errors about missing cryptography.
+    """
+    # Create a simple PDF
+    pdf_path = temp_dir / "encrypted_test.pdf"
+    writer = pypdf.PdfWriter()
+    
+    # Add a page with some text
+    page = pypdf.PageObject.create_blank_page(width=200, height=200)
+    writer.add_page(page)
+    
+    # Encrypt the PDF with a password
+    writer.encrypt(user_password="test123", owner_password="owner123", algorithm="AES-256")
+    
+    # Write the encrypted PDF
+    with open(pdf_path, "wb") as f:
+        writer.write(f)
+    
+    # Try to extract text - this should not raise an error about missing cryptography
+    # The extraction will fail with "File has not been decrypted" but that's expected
+    # The important thing is that it doesn't fail with "cryptography>=3.1 is required"
+    text = DocumentExtractor.extract_text(pdf_path)
+    
+    # The function should handle encrypted PDFs gracefully
+    # When cryptography is installed, pypdf can at least detect the encryption
+    # Without cryptography, it would fail with "cryptography>=3.1 is required for AES algorithm"
+    # So if we get None here, it means the package handled the encrypted PDF properly
+    assert text is None  # Expected: None because the file is encrypted and not decrypted
