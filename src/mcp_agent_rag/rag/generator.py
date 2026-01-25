@@ -9,6 +9,25 @@ from mcp_agent_rag.utils import get_logger
 logger = get_logger(__name__)
 
 
+def normalize_ollama_host(host: str) -> str:
+    """Normalize Ollama host URL.
+    
+    Args:
+        host: Ollama host URL
+        
+    Returns:
+        Normalized host URL without /api suffix or trailing slashes
+    """
+    # Strip whitespace
+    host = host.strip()
+    # Remove trailing slashes
+    host = host.rstrip("/")
+    # Remove /api suffix if present to avoid double /api/api/ in URLs
+    if host.endswith("/api"):
+        host = host[:-4]
+    return host
+
+
 class OllamaGenerator:
     """Generate chat responses using Ollama."""
 
@@ -24,7 +43,7 @@ class OllamaGenerator:
             host: Ollama host URL
         """
         self.model = model
-        self.host = host.rstrip("/")
+        self.host = normalize_ollama_host(host)
         self.generate_url = f"{self.host}/api/generate"
 
     def generate(self, prompt: str, context: str = "") -> str | None:

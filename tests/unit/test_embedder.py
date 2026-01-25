@@ -5,7 +5,7 @@ from unittest.mock import Mock, patch
 import pytest
 import requests
 
-from mcp_agent_rag.rag.embedder import OllamaEmbedder
+from mcp_agent_rag.rag.embedder import OllamaEmbedder, normalize_ollama_host
 
 
 @pytest.fixture
@@ -14,11 +14,42 @@ def embedder():
     return OllamaEmbedder(model="test-model", host="http://localhost:11434")
 
 
+def test_embedder_normalize_ollama_host_basic():
+    """Test basic host normalization."""
+    assert normalize_ollama_host("http://localhost:11434") == "http://localhost:11434"
+
+
+def test_embedder_normalize_ollama_host_with_api_suffix():
+    """Test host normalization with /api suffix."""
+    assert normalize_ollama_host("http://localhost:11434/api") == "http://localhost:11434"
+
+
 def test_embedder_init(embedder):
     """Test embedder initialization."""
     assert embedder.model == "test-model"
     assert embedder.host == "http://localhost:11434"
     assert "api/embed" in embedder.embed_url
+
+
+def test_embedder_init_with_api_suffix():
+    """Test embedder initialization with /api suffix in host."""
+    emb = OllamaEmbedder(model="test-model", host="http://localhost:11434/api")
+    assert emb.host == "http://localhost:11434"
+    assert emb.embed_url == "http://localhost:11434/api/embed"
+
+
+def test_embedder_init_with_trailing_slash():
+    """Test embedder initialization with trailing slash in host."""
+    emb = OllamaEmbedder(model="test-model", host="http://localhost:11434/")
+    assert emb.host == "http://localhost:11434"
+    assert emb.embed_url == "http://localhost:11434/api/embed"
+
+
+def test_embedder_init_with_api_and_slash():
+    """Test embedder initialization with /api/ in host."""
+    emb = OllamaEmbedder(model="test-model", host="http://localhost:11434/api/")
+    assert emb.host == "http://localhost:11434"
+    assert emb.embed_url == "http://localhost:11434/api/embed"
 
 
 def test_embed_success(embedder, mock_ollama_response):

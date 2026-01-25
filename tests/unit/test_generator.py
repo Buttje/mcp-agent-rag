@@ -5,7 +5,7 @@ from unittest.mock import Mock, patch
 import pytest
 import requests
 
-from mcp_agent_rag.rag.generator import OllamaGenerator
+from mcp_agent_rag.rag.generator import OllamaGenerator, normalize_ollama_host
 
 
 @pytest.fixture
@@ -14,11 +14,67 @@ def generator():
     return OllamaGenerator(model="test-model", host="http://localhost:11434")
 
 
+def test_normalize_ollama_host_basic():
+    """Test basic host normalization."""
+    assert normalize_ollama_host("http://localhost:11434") == "http://localhost:11434"
+
+
+def test_normalize_ollama_host_trailing_slash():
+    """Test host normalization with trailing slash."""
+    assert normalize_ollama_host("http://localhost:11434/") == "http://localhost:11434"
+
+
+def test_normalize_ollama_host_multiple_trailing_slashes():
+    """Test host normalization with multiple trailing slashes."""
+    assert normalize_ollama_host("http://localhost:11434///") == "http://localhost:11434"
+
+
+def test_normalize_ollama_host_with_api_suffix():
+    """Test host normalization with /api suffix."""
+    assert normalize_ollama_host("http://localhost:11434/api") == "http://localhost:11434"
+
+
+def test_normalize_ollama_host_with_api_and_slash():
+    """Test host normalization with /api/ suffix."""
+    assert normalize_ollama_host("http://localhost:11434/api/") == "http://localhost:11434"
+
+
+def test_normalize_ollama_host_with_whitespace():
+    """Test host normalization with whitespace."""
+    assert normalize_ollama_host("  http://localhost:11434  ") == "http://localhost:11434"
+
+
+def test_normalize_ollama_host_with_all_issues():
+    """Test host normalization with multiple issues."""
+    assert normalize_ollama_host("  http://localhost:11434/api/  ") == "http://localhost:11434"
+
+
 def test_generator_init(generator):
     """Test generator initialization."""
     assert generator.model == "test-model"
     assert generator.host == "http://localhost:11434"
     assert "api/generate" in generator.generate_url
+
+
+def test_generator_init_with_api_suffix():
+    """Test generator initialization with /api suffix in host."""
+    gen = OllamaGenerator(model="test-model", host="http://localhost:11434/api")
+    assert gen.host == "http://localhost:11434"
+    assert gen.generate_url == "http://localhost:11434/api/generate"
+
+
+def test_generator_init_with_trailing_slash():
+    """Test generator initialization with trailing slash in host."""
+    gen = OllamaGenerator(model="test-model", host="http://localhost:11434/")
+    assert gen.host == "http://localhost:11434"
+    assert gen.generate_url == "http://localhost:11434/api/generate"
+
+
+def test_generator_init_with_api_and_slash():
+    """Test generator initialization with /api/ in host."""
+    gen = OllamaGenerator(model="test-model", host="http://localhost:11434/api/")
+    assert gen.host == "http://localhost:11434"
+    assert gen.generate_url == "http://localhost:11434/api/generate"
 
 
 def test_generate_success(generator):
