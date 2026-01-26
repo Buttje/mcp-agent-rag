@@ -45,13 +45,14 @@ class MCPClient:
         }
 
         try:
-            # Send request
+            # Send request with explicit UTF-8 encoding
             request_json = json.dumps(request) + "\n"
-            self.process.stdin.write(request_json.encode())
+            self.process.stdin.write(request_json.encode('utf-8'))
             self.process.stdin.flush()
 
-            # Read response
-            response_line = self.process.stdout.readline().decode().strip()
+            # Read response line by line with explicit UTF-8 decoding
+            # to handle special characters correctly
+            response_line = self.process.stdout.readline().decode('utf-8').strip()
             if not response_line:
                 raise ConnectionError("MCP server closed connection")
 
@@ -112,7 +113,8 @@ def start_mcp_server(config: Config, active_databases: list[str]) -> subprocess.
             stdin=subprocess.PIPE,
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
-            bufsize=1,  # Line-buffered to prevent truncation
+            # No bufsize specified - use default buffering which works correctly
+            # with binary mode pipes and avoids RuntimeWarning
         )
 
         # Give server time to start
@@ -120,7 +122,7 @@ def start_mcp_server(config: Config, active_databases: list[str]) -> subprocess.
 
         # Check if process is still running
         if process.poll() is not None:
-            stderr = process.stderr.read().decode()
+            stderr = process.stderr.read().decode('utf-8')
             raise RuntimeError(f"MCP server failed to start: {stderr}")
 
         logger.info("MCP server started successfully")

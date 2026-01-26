@@ -116,6 +116,35 @@ def test_mcp_client_no_truncation():
     assert result["context"].startswith("Graufell ist ein mächtischer Mann")
 
 
+def test_mcp_client_utf8_encoding():
+    """Test that MCP client handles UTF-8 characters correctly."""
+    mock_process = Mock()
+    mock_process.stdin = Mock()
+    mock_process.stdout = Mock()
+    mock_process.poll.return_value = None
+
+    # Create a response with German text containing umlauts
+    text_with_umlauts = "Graufell ist ein mächtischer Mann mit Fähigkeiten über Äther."
+    response = {
+        "jsonrpc": "2.0",
+        "id": 1,
+        "result": {"context": text_with_umlauts, "citations": []},
+    }
+    # Use the same JSON serialization as production code
+    mock_process.stdout.readline.return_value = (
+        (json.dumps(response) + "\n").encode('utf-8')
+    )
+
+    client = MCPClient(mock_process)
+    result = client.call_tool("query/get_data", {"prompt": "test"})
+
+    # Verify UTF-8 characters are preserved
+    assert result["context"] == text_with_umlauts
+    assert "mächtischer" in result["context"]
+    assert "Fähigkeiten" in result["context"]
+    assert "Äther" in result["context"]
+
+
 def test_chat_cli_main_no_databases(test_config, capsys):
     """Test chat CLI main with no databases."""
     with patch("mcp_agent_rag.chat_cli.Config") as mock_config_class:
