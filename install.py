@@ -3,12 +3,10 @@
 
 import argparse
 import json
-import os
 import platform
 import subprocess
 import sys
 from pathlib import Path
-from typing import List, Tuple
 
 try:
     import requests
@@ -38,7 +36,7 @@ def normalize_host(host: str) -> str:
     return host
 
 
-def check_ollama_connection(host: str, timeout: int = 5) -> Tuple[bool, str]:
+def check_ollama_connection(host: str, timeout: int = 5) -> tuple[bool, str]:
     """Test connection to Ollama server.
     
     Args:
@@ -50,16 +48,16 @@ def check_ollama_connection(host: str, timeout: int = 5) -> Tuple[bool, str]:
     """
     if requests is None:
         return False, "requests library not available yet"
-        
+
     try:
         normalized_host = normalize_host(host)
         response = requests.get(f"{normalized_host}/api/tags", timeout=timeout)
-        
+
         if response.status_code == 200:
             return True, ""
         else:
             return False, f"Server returned HTTP {response.status_code}"
-            
+
     except requests.exceptions.Timeout:
         return False, f"Connection timeout to {host}"
     except requests.exceptions.ConnectionError:
@@ -68,7 +66,7 @@ def check_ollama_connection(host: str, timeout: int = 5) -> Tuple[bool, str]:
         return False, f"Error: {str(e)}"
 
 
-def fetch_ollama_models(host: str, timeout: int = 5) -> Tuple[List[str], List[str], str]:
+def fetch_ollama_models(host: str, timeout: int = 5) -> tuple[list[str], list[str], str]:
     """Fetch available models from Ollama server and categorize them.
     
     Args:
@@ -81,35 +79,35 @@ def fetch_ollama_models(host: str, timeout: int = 5) -> Tuple[List[str], List[st
     """
     if requests is None:
         return [], [], "requests library not available yet"
-        
+
     try:
         normalized_host = normalize_host(host)
         response = requests.get(f"{normalized_host}/api/tags", timeout=timeout)
-        
+
         if response.status_code != 200:
             return [], [], f"Failed to fetch models: HTTP {response.status_code}"
-        
+
         data = response.json()
         models = data.get("models", [])
-        
+
         embedding_models = []
         generative_models = []
-        
+
         for model in models:
             model_name = model.get("name", "")
             # Remove :latest tag for cleaner display
             display_name = model_name.replace(":latest", "")
-            
+
             # Check if it's an embedding model using patterns
             is_embedding = any(pattern in model_name.lower() for pattern in EMBEDDING_MODEL_PATTERNS)
-            
+
             if is_embedding:
                 embedding_models.append(display_name)
             else:
                 generative_models.append(display_name)
-        
+
         return embedding_models, generative_models, ""
-        
+
     except requests.exceptions.Timeout:
         return [], [], f"Connection timeout to {host}"
     except requests.exceptions.ConnectionError:
@@ -183,7 +181,7 @@ def main():
 
     # Configuration
     config_path = Path.home() / ".mcp-agent-rag" / "config.json"
-    
+
     if args.config:
         print(f"\nUsing existing config: {args.config}")
         config_path = Path(args.config)
@@ -192,11 +190,11 @@ def main():
             sys.exit(1)
     else:
         config_path.parent.mkdir(parents=True, exist_ok=True)
-        
+
         if config_path.exists():
             print(f"\nExisting configuration found at: {config_path}")
             print("Preserving existing configuration...")
-            with open(config_path, "r") as f:
+            with open(config_path) as f:
                 config = json.load(f)
             print("Configuration preserved")
         else:
@@ -211,12 +209,12 @@ def main():
     print("\n" + "=" * 60)
     print("Installation complete!")
     print("=" * 60)
-    print(f"\nTo use MCP-RAG:")
+    print("\nTo use MCP-RAG:")
     if os_name == "Windows":
         print(f"  1. Activate: {venv_path}\\Scripts\\activate")
     else:
         print(f"  1. Activate: source {venv_path}/bin/activate")
-    print(f"  2. Run: mcp-rag --help")
+    print("  2. Run: mcp-rag --help")
     print(f"\nConfig file: {config_path}")
 
 
@@ -253,19 +251,19 @@ def create_config(no_prompt: bool) -> dict:
     ollama_host = input(f"Ollama host URL [{config['ollama_host']}]: ").strip()
     if ollama_host:
         config["ollama_host"] = ollama_host
-    
+
     # Test connection and fetch available models
     print(f"\nTesting connection to {config['ollama_host']}...")
     success, error = check_ollama_connection(config['ollama_host'])
-    
+
     embedding_models = []
     generative_models = []
-    
+
     if success:
         print("✓ Connection successful!")
         print("Fetching available models...")
         embedding_models, generative_models, error = fetch_ollama_models(config['ollama_host'])
-        
+
         if error:
             print(f"Warning: {error}")
             print("Will use default model options.")
@@ -274,7 +272,7 @@ def create_config(no_prompt: bool) -> dict:
     else:
         print(f"⚠ Warning: {error}")
         print("Will use default model options. You can change them later in the config.")
-    
+
     # Embedding model
     print("\n2. Embedding Model Selection")
     print("-" * 40)
@@ -283,8 +281,8 @@ def create_config(no_prompt: bool) -> dict:
         for i, model in enumerate(embedding_models, 1):
             default_marker = " (default)" if model == config['embedding_model'] else ""
             print(f"  {i}. {model}{default_marker}")
-        
-        choice = input(f"Select embedding model [1]: ").strip() or "1"
+
+        choice = input("Select embedding model [1]: ").strip() or "1"
         try:
             idx = int(choice) - 1
             if 0 <= idx < len(embedding_models):
@@ -311,8 +309,8 @@ def create_config(no_prompt: bool) -> dict:
         for i, model in enumerate(generative_models, 1):
             default_marker = " (default)" if model == config['generative_model'] else ""
             print(f"  {i}. {model}{default_marker}")
-        
-        choice = input(f"Select generative model [1]: ").strip() or "1"
+
+        choice = input("Select generative model [1]: ").strip() or "1"
         try:
             idx = int(choice) - 1
             if 0 <= idx < len(generative_models):
