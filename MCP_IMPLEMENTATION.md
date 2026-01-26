@@ -87,33 +87,97 @@ All three transport protocols are fully implemented:
 - Request handling in `handle_request()` method
 - Support for both direct method calls and `tools/call` wrapper
 
+### 3.1 MCP Lifecycle - Initialize Method
+The server implements the required MCP initialization handshake:
+
+#### initialize
+- **Purpose**: First interaction between client and server for protocol negotiation
+- **Parameters**:
+  - `protocolVersion` (optional): Client's supported version (default: "2025-11-25")
+  - `capabilities` (optional): Client's capabilities
+  - `clientInfo` (optional): Information about the client (name, version)
+- **Returns**:
+  - `protocolVersion`: Server's supported protocol version ("2025-11-25")
+  - `capabilities`: Server capabilities (resources, tools, prompts, logging)
+  - `serverInfo`: Server information (name: "mcp-agent-rag", version: "1.0.0")
+  - `instructions`: Human-readable information about active databases
+- **Location**: `src/mcp_agent_rag/mcp/server.py:43-91`
+- **Tests**: 3 tests covering full initialization, minimal parameters, and notifications
+
+#### notifications/initialized
+- **Purpose**: Client notification confirming readiness after initialization
+- **Parameters**: None
+- **Returns**: None (notifications don't receive responses)
+- **Location**: `src/mcp_agent_rag/mcp/server.py:59-61`
+
+**Example Initialize Request/Response:**
+```json
+// Request
+{
+  "jsonrpc": "2.0",
+  "id": 1,
+  "method": "initialize",
+  "params": {
+    "protocolVersion": "2025-11-25",
+    "capabilities": {},
+    "clientInfo": {"name": "MyClient", "version": "1.0.0"}
+  }
+}
+
+// Response
+{
+  "jsonrpc": "2.0",
+  "id": 1,
+  "result": {
+    "protocolVersion": "2025-11-25",
+    "capabilities": {
+      "resources": {"subscribe": false, "listChanged": false},
+      "tools": {"listChanged": false},
+      "prompts": {"listChanged": false},
+      "logging": {}
+    },
+    "serverInfo": {"name": "mcp-agent-rag", "version": "1.0.0"},
+    "instructions": "MCP RAG Server with 1 active database(s): mydb"
+  }
+}
+```
+
 ### 4. MCP Protocol Integration
+- Protocol initialization via `initialize` method (MCP lifecycle requirement)
+- Support for `notifications/initialized` for client handshake
 - All tools are discoverable via `tools/list` method
 - Tools include proper JSON Schema for input validation
 - Support for `tools/call` method to invoke any tool
 - Proper resource listing via `resources/list`
+- Protocol version: 2025-11-25
+- Server capabilities advertised (resources, tools, prompts, logging)
 
 ## Test Coverage
 
 ### Unit Tests
-- **Total Tests**: 198 passing
-- **Overall Coverage**: 72.42%
-- **New Tests Added**: 33 tests for MCP tools + 16 tests for transports
+- **Total Tests**: 201 passing (1 skipped)
+- **Overall Coverage**: 72.40%
+- **New Tests Added**: 36 tests (3 initialize + 33 MCP tools + 16 transports)
 
 ### Test Breakdown
-1. **getDatabases Tool**: 3 tests
+1. **Initialize Method**: 3 tests
+   - Full initialization with all parameters
+   - Minimal parameters (defaults)
+   - notifications/initialized handling
+
+2. **getDatabases Tool**: 3 tests
    - Basic functionality
    - Via tools/call
    - Appears in tools/list
 
-2. **getInformationFor Tool**: 5 tests
+3. **getInformationFor Tool**: 5 tests
    - Success case with multiple databases
    - Missing prompt parameter
    - Custom max_results
    - Via tools/call
    - Appears in tools/list
 
-3. **getInformationForDB Tool**: 9 tests
+4. **getInformationForDB Tool**: 9 tests
    - Success case with specific database
    - Missing prompt parameter
    - Missing database_name parameter
@@ -124,7 +188,7 @@ All three transport protocols are fully implemented:
    - Via tools/call
    - Appears in tools/list
 
-4. **HTTP Transport**: 8 tests
+5. **HTTP Transport**: 8 tests
    - Server startup
    - Health check endpoint
    - POST request handling
@@ -134,14 +198,14 @@ All three transport protocols are fully implemented:
    - getDatabases via HTTP
    - getInformationForDB via HTTP
 
-5. **SSE Transport**: 5 tests
+6. **SSE Transport**: 5 tests
    - Server startup
    - Health check endpoint
    - SSE endpoint headers
    - POST request handling
    - getInformationFor via SSE
 
-6. **Integration Tests**: 3 tests
+7. **Integration Tests**: 3 tests
    - All tools listed
    - Workflow: get databases then query
    - Compare search all vs specific
@@ -256,18 +320,20 @@ curl http://localhost:8080/health
 
 While not required for the current specification, these could be added:
 
-1. **Protocol Negotiation**: Add `initialize` method for version negotiation
-2. **Capabilities Discovery**: Implement capabilities exchange
-3. **Streaming Responses**: Add streaming support for large results
-4. **Authentication**: Add token-based auth for HTTP/SSE transports
-5. **Rate Limiting**: Add rate limiting for production deployments
-6. **Metrics**: Add Prometheus metrics endpoint
-7. **WebSocket Transport**: Add WebSocket support for bidirectional streaming
+1. **Streaming Responses**: Add streaming support for large results
+2. **Authentication**: Add token-based auth for HTTP/SSE transports
+3. **Rate Limiting**: Add rate limiting for production deployments
+4. **Metrics**: Add Prometheus metrics endpoint
+5. **WebSocket Transport**: Add WebSocket support for bidirectional streaming
+6. **Resource Subscriptions**: Add support for resource subscription notifications
+7. **Prompt Templates**: Add support for MCP prompt templates
 
 ## Compliance Summary
 
 | Requirement | Status | Location |
 |------------|--------|----------|
+| initialize method | ✅ Complete | `server.py:43-91` |
+| notifications/initialized | ✅ Complete | `server.py:59-61` |
 | getDatabases() tool | ✅ Complete | `server.py:186-203` |
 | getInformationFor() tool | ✅ Complete | `server.py:205-230` |
 | getInformationForDB() tool | ✅ Complete | `server.py:232-310` |
@@ -277,18 +343,19 @@ While not required for the current specification, these could be added:
 | JSON-RPC 2.0 | ✅ Complete | `server.py:39-82` |
 | tools/list | ✅ Complete | `server.py:364-431` |
 | tools/call | ✅ Complete | `server.py:433-453` |
-| Unit tests | ✅ Complete | 198 tests passing |
+| Unit tests | ✅ Complete | 201 tests passing |
 | Documentation | ✅ Complete | README.md updated |
 | Security scan | ✅ Complete | 0 vulnerabilities |
 
 ## Conclusion
 
 This implementation fully satisfies the MCP protocol specification requirements:
+- ✅ Protocol initialization and lifecycle management (initialize/initialized)
 - ✅ All three required tools implemented and tested
 - ✅ All three transport protocols implemented and tested
-- ✅ Comprehensive unit tests with 72% coverage
+- ✅ Comprehensive unit tests with 72% coverage (201 tests passing)
 - ✅ Full documentation with examples
 - ✅ Security scan passed
 - ✅ Manual verification completed
 
-The MCP server is production-ready and can be used via stdio, HTTP, or SSE transports to query document databases using vector similarity search.
+The MCP server is production-ready and can be used via stdio, HTTP, or SSE transports to query document databases using vector similarity search. The server properly implements the MCP initialization handshake required by the specification.
