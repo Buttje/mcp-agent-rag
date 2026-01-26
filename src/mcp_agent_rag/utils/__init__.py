@@ -32,8 +32,8 @@ def setup_logger(
     # Remove existing handlers
     logger.handlers.clear()
 
-    # Console handler
-    console_handler = logging.StreamHandler(sys.stdout)
+    # Console handler - use stderr to avoid interfering with stdout (used for JSON-RPC)
+    console_handler = logging.StreamHandler(sys.stderr)
     console_handler.setLevel(getattr(logging, level.upper()))
     console_format = logging.Formatter(
         "%(asctime)s - %(name)s - %(levelname)s - %(message)s",
