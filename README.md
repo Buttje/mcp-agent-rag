@@ -9,10 +9,12 @@ A Python implementation of a Model Context Protocol (MCP) server that provides r
 - **Vector Database**: FAISS-based indexing with metadata persistence
 - **Agentic RAG**: Intelligent context retrieval with deduplication and citation tracking
 - **Interactive Chat Client**: Built-in CLI chat interface for natural conversations with your documents
-- **MCP Compliance**: Full JSON-RPC server implementing Model Context Protocol
+- **MCP Compliance**: Full JSON-RPC server implementing Model Context Protocol (2025-11-25)
+- **Multiple Transport Protocols**: Support for stdio, HTTP, and SSE transports
+- **Required MCP Tools**: `getDatabases()`, `getInformationFor()`, `getInformationForDB()`
 - **CLI Interface**: Easy-to-use command-line tools for database and server management
 - **Cross-Platform**: Works on Windows 10/11 and Ubuntu 22.04 LTS
-- **Comprehensive Testing**: 117 tests with 81% coverage
+- **Comprehensive Testing**: 198 tests with 72% coverage
 
 ## Requirements
 
@@ -84,8 +86,26 @@ python mcp-rag.py database list
 
 ### Start MCP Server
 
+The MCP server supports three transport protocols: stdio, HTTP, and SSE.
+
+**stdio transport (for local/CLI usage):**
 ```bash
 python mcp-rag.py server start --active-databases mydb --transport stdio
+```
+
+**HTTP transport (for remote/API usage):**
+```bash
+python mcp-rag.py server start --active-databases mydb --transport http --host 127.0.0.1 --port 8080
+```
+
+**SSE transport (deprecated, for backwards compatibility):**
+```bash
+python mcp-rag.py server start --active-databases mydb --transport sse --host 127.0.0.1 --port 8080
+```
+
+You can activate multiple databases by providing a comma-separated list:
+```bash
+python mcp-rag.py server start --active-databases db1,db2,db3 --transport stdio
 ```
 
 ### Interactive Chat Client
@@ -132,9 +152,85 @@ You: quit
 Goodbye!
 ```
 
-## MCP Tools
+## MCP Protocol Support
 
-The server exposes the following MCP tools:
+This implementation conforms to the [Model Context Protocol specification (2025-11-25)](https://modelcontextprotocol.io/specification/2025-11-25).
+
+### Transport Protocols
+
+- **stdio**: Standard input/output transport for local processes and IDEs
+- **HTTP**: HTTP POST transport for remote/concurrent access with CORS support
+- **SSE**: Server-Sent Events transport (deprecated, provided for backwards compatibility)
+
+All transports use JSON-RPC 2.0 for message formatting.
+
+### MCP Tools
+
+The server implements these MCP-compliant tools as specified in the requirements:
+
+#### getDatabases()
+Returns the list of activated databases in the MCP RAG server.
+
+**Parameters:** None
+
+**Returns:**
+```json
+{
+  "databases": [
+    {
+      "name": "mydb",
+      "description": "My document collection",
+      "doc_count": 42,
+      "last_updated": "2024-01-15T10:30:00",
+      "path": "/path/to/db"
+    }
+  ],
+  "count": 1
+}
+```
+
+#### getInformationFor(Prompt)
+Returns information by scanning through all activated databases using vector similarity search.
+
+**Parameters:**
+- `prompt` (string, required): The query/prompt to search for
+- `max_results` (integer, optional): Maximum results per database (default: 5)
+
+**Returns:**
+```json
+{
+  "prompt": "What is Python?",
+  "context": "Relevant text chunks...",
+  "citations": [
+    {"source": "python.txt", "chunk": 0, "database": "mydb"}
+  ],
+  "databases_searched": ["mydb", "otherdb"]
+}
+```
+
+#### getInformationForDB(Prompt, DatabaseName)
+Returns information by scanning just the named database.
+
+**Parameters:**
+- `prompt` (string, required): The query/prompt to search for
+- `database_name` (string, required): Name of the specific database to search
+- `max_results` (integer, optional): Maximum results (default: 5)
+
+**Returns:**
+```json
+{
+  "prompt": "What is Python?",
+  "database": "mydb",
+  "context": "Relevant text chunks...",
+  "citations": [
+    {"source": "python.txt", "chunk": 0, "database": "mydb"}
+  ]
+}
+```
+
+### Legacy Tools (also available)
+
+The server also exposes these additional tools for database management:
 
 ### database/create
 Create a new database with a unique name.
@@ -163,6 +259,106 @@ Retrieve context for a user's prompt using agentic RAG.
 **Parameters:**
 - `prompt` (string, required): The query
 - `max_results` (integer, optional, default: 5): Maximum results per database
+
+## Usage Examples
+
+### Using MCP Tools with HTTP Transport
+
+Start the server with HTTP transport:
+```bash
+python mcp-rag.py server start --active-databases mydb,otherdb --transport http --port 8080
+```
+
+Call the `getDatabases` tool:
+```bash
+curl -X POST http://localhost:8080/ \
+  -H "Content-Type: application/json" \
+  -d '{
+    "jsonrpc": "2.0",
+    "id": 1,
+    "method": "getDatabases",
+    "params": {}
+  }'
+```
+
+Response:
+```json
+{
+  "jsonrpc": "2.0",
+  "id": 1,
+  "result": {
+    "databases": [
+      {"name": "mydb", "description": "My docs", "doc_count": 42},
+      {"name": "otherdb", "description": "Other docs", "doc_count": 15}
+    ],
+    "count": 2
+  }
+}
+```
+
+Call the `getInformationFor` tool to search all databases:
+```bash
+curl -X POST http://localhost:8080/ \
+  -H "Content-Type: application/json" \
+  -d '{
+    "jsonrpc": "2.0",
+    "id": 2,
+    "method": "getInformationFor",
+    "params": {
+      "prompt": "What is Python used for?",
+      "max_results": 5
+    }
+  }'
+```
+
+Call the `getInformationForDB` tool to search a specific database:
+```bash
+curl -X POST http://localhost:8080/ \
+  -H "Content-Type: application/json" \
+  -d '{
+    "jsonrpc": "2.0",
+    "id": 3,
+    "method": "getInformationForDB",
+    "params": {
+      "prompt": "Python programming",
+      "database_name": "mydb",
+      "max_results": 3
+    }
+  }'
+```
+
+### Using MCP Tools via tools/call
+
+All tools can also be invoked via the standard `tools/call` method:
+
+```bash
+curl -X POST http://localhost:8080/ \
+  -H "Content-Type: application/json" \
+  -d '{
+    "jsonrpc": "2.0",
+    "id": 4,
+    "method": "tools/call",
+    "params": {
+      "name": "getDatabases",
+      "arguments": {}
+    }
+  }'
+```
+
+### Health Check Endpoint
+
+Both HTTP and SSE transports provide a health check endpoint:
+```bash
+curl http://localhost:8080/health
+```
+
+Response:
+```json
+{
+  "status": "ok",
+  "active_databases": ["mydb", "otherdb"]
+}
+```
 
 ## Configuration
 
