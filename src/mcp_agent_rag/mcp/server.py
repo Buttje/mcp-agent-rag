@@ -159,7 +159,7 @@ class MCPServer:
             )
 
     def _create_database(self, params: Dict) -> Dict:
-        """Handle database/create."""
+        """Handle database-create."""
         name = params.get("name")
         if not name:
             raise ValueError("Missing required parameter: name")
@@ -179,7 +179,7 @@ class MCPServer:
         }
 
     def _add_documents(self, params: Dict) -> Dict:
-        """Handle database/add."""
+        """Handle database-add."""
         database_name = params.get("database_name")
         if not database_name:
             raise ValueError("Missing required parameter: database_name")
@@ -211,7 +211,7 @@ class MCPServer:
         }
 
     def _list_databases(self, params: Dict) -> Dict:
-        """Handle database/list."""
+        """Handle database-list."""
         databases = self.db_manager.list_databases()
         result = []
 
@@ -227,7 +227,7 @@ class MCPServer:
         return {"databases": result}
 
     def _query_data(self, params: Dict) -> Dict:
-        """Handle query/get_data."""
+        """Handle query-get_data."""
         prompt = params.get("prompt")
         if not prompt:
             raise ValueError("Missing required parameter: prompt")

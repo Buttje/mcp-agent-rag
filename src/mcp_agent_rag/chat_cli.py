@@ -155,7 +155,7 @@ def create_mcp_tool_query_data(mcp_client: MCPClient):
         """
         try:
             result = mcp_client.call_tool(
-                "query/get_data", {"prompt": prompt, "max_results": max_results}
+                "query-get_data", {"prompt": prompt, "max_results": max_results}
             )
 
             context = result.get("context", "")
