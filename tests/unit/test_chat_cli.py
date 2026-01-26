@@ -95,7 +95,10 @@ def test_mcp_client_no_truncation():
     mock_process.poll.return_value = None
 
     # Create a response with long text that would be prone to truncation
-    long_text = "Graufell ist ein mächtischer Mann, der einst ein Bauer aus Helmark war. " * 10
+    # Repeat text multiple times to simulate a long response
+    base_text = "Graufell ist ein mächtischer Mann, der einst ein Bauer aus Helmark war. "
+    repeat_count = 10
+    long_text = base_text * repeat_count
     response = {
         "jsonrpc": "2.0",
         "id": 1,
