@@ -1,6 +1,7 @@
 """Tests for logging utilities."""
 
 import logging
+import sys
 from pathlib import Path
 
 import pytest
@@ -78,3 +79,22 @@ def test_logger_rotation(temp_dir):
     log_dir = temp_dir
     log_files = list(log_dir.glob("test.log*"))
     assert len(log_files) > 1  # Original + backups
+
+
+def test_console_handler_uses_stderr():
+    """Test that console handler writes to stderr, not stdout.
+    
+    This is critical for MCP server operation where stdout is used
+    for JSON-RPC communication and must not be polluted by log messages.
+    """
+    logger = setup_logger("test", None, "INFO")
+    
+    # Find the console handler
+    console_handler = None
+    for handler in logger.handlers:
+        if isinstance(handler, logging.StreamHandler) and handler.stream in (sys.stdout, sys.stderr):
+            console_handler = handler
+            break
+    
+    assert console_handler is not None, "Console handler not found"
+    assert console_handler.stream == sys.stderr, "Console handler should write to stderr, not stdout"
