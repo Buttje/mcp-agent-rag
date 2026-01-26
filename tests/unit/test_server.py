@@ -293,6 +293,34 @@ def test_resources_templates_structure(server):
     assert any("database://{database_name}/info" in uri for uri in uri_templates)
 
 
+def test_handle_prompts_list(server):
+    """Test handling prompts/list request."""
+    request = {
+        "jsonrpc": "2.0",
+        "id": 13,
+        "method": "prompts/list",
+        "params": {},
+    }
+
+    response = server.handle_request(request)
+    assert response["id"] == 13
+    assert "result" in response
+    assert "prompts" in response["result"]
+    prompts = response["result"]["prompts"]
+    assert isinstance(prompts, list)
+    # Currently returns empty list, which is valid per MCP spec
+
+
+def test_prompts_list_structure(server):
+    """Test that prompts list follows MCP specification structure."""
+    result = server._list_prompts({})
+    
+    assert "prompts" in result
+    prompts = result["prompts"]
+    assert isinstance(prompts, list)
+    # Empty list is valid - server doesn't define custom prompts yet
+
+
 def test_handle_get_databases(server):
     """Test handling getDatabases request."""
     request = {

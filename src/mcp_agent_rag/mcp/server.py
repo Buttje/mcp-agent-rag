@@ -76,7 +76,7 @@ class MCPServer:
                 "listChanged": False,  # Tool list is static
             },
             "prompts": {
-                "listChanged": False,  # We don't support prompts yet
+                "listChanged": False,  # Prompts list is static (empty for now)
             },
             "logging": {},  # We support logging
         }
@@ -133,6 +133,8 @@ class MCPServer:
                 result = self._list_resources(params)
             elif method == "resources/templates/list":
                 result = self._list_resource_templates(params)
+            elif method == "prompts/list":
+                result = self._list_prompts(params)
             elif method == "tools/list":
                 result = self._list_tools(params)
             elif method == "tools/call":
@@ -424,6 +426,24 @@ class MCPServer:
         })
         
         return {"resourceTemplates": resource_templates}
+
+    def _list_prompts(self, params: Dict) -> Dict:
+        """Handle prompts/list.
+        
+        Returns list of available prompts according to MCP specification.
+        Prompts are predefined, user-focused templates that servers expose to clients.
+        
+        Args:
+            params: Optional parameters (e.g., cursor for pagination)
+            
+        Returns:
+            Dictionary containing list of prompts (currently empty as this server
+            doesn't define custom prompts yet, but this satisfies the MCP protocol)
+        """
+        # For now, return an empty list of prompts
+        # In the future, this could be extended to include custom prompt templates
+        # for common RAG operations
+        return {"prompts": []}
 
     def _list_tools(self, params: Dict) -> Dict:
         """Handle tools/list."""
