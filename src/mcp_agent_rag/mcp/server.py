@@ -76,7 +76,7 @@ class MCPServer:
                 "listChanged": False,  # Tool list is static
             },
             "prompts": {
-                "listChanged": False,  # We don't support prompts yet
+                "listChanged": False,  # Prompts list is static (empty for now)
             },
             "logging": {},  # We support logging
         }
