@@ -57,6 +57,17 @@ def setup_logger(
         file_handler.setFormatter(file_format)
         logger.addHandler(file_handler)
 
+    # Also configure the mcp_agent_rag parent logger to ensure all module loggers
+    # inherit the console and file handlers
+    app_logger = logging.getLogger("mcp_agent_rag")
+    app_logger.setLevel(getattr(logging, level.upper()))
+    app_logger.handlers.clear()
+    
+    # Add same handlers to app logger
+    app_logger.addHandler(console_handler)
+    if log_file:
+        app_logger.addHandler(file_handler)
+
     return logger
 
 
