@@ -184,3 +184,54 @@ def test_add_documents_nonexistent_database(server):
     response = server.handle_request(request)
     assert response["id"] == 10
     assert "error" in response
+
+
+def test_handle_initialize(server):
+    """Test handling initialize request."""
+    request = {
+        "jsonrpc": "2.0",
+        "id": 11,
+        "method": "initialize",
+        "params": {
+            "protocolVersion": "2025-11-25",
+            "capabilities": {"roots": {"listChanged": True}},
+            "clientInfo": {"name": "TestClient", "version": "1.0.0"},
+        },
+    }
+
+    response = server.handle_request(request)
+    assert response["id"] == 11
+    assert "result" in response
+    assert response["result"]["protocolVersion"] == "2025-11-25"
+    assert "capabilities" in response["result"]
+    assert "serverInfo" in response["result"]
+    assert response["result"]["serverInfo"]["name"] == "mcp-agent-rag"
+
+
+def test_handle_initialized_notification(server):
+    """Test handling initialized notification."""
+    request = {
+        "jsonrpc": "2.0",
+        "method": "notifications/initialized",
+    }
+
+    response = server.handle_request(request)
+    # Notifications should return None
+    assert response is None
+
+
+def test_initialize_minimal_params(server):
+    """Test initialize with minimal parameters."""
+    request = {
+        "jsonrpc": "2.0",
+        "id": 12,
+        "method": "initialize",
+        "params": {},
+    }
+
+    response = server.handle_request(request)
+    assert response["id"] == 12
+    assert "result" in response
+    assert "protocolVersion" in response["result"]
+    assert "capabilities" in response["result"]
+    assert "serverInfo" in response["result"]
