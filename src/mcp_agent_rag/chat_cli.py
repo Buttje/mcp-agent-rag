@@ -302,7 +302,6 @@ def main():
             ],
             tools=[query_tool],
             markdown=True,
-            show_tool_calls=True,
         )
 
         print("Agent initialized successfully!")
