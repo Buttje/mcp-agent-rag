@@ -248,3 +248,47 @@ def test_custom_notification_handling(server):
     response = server.handle_request(request)
     # Notifications should return None
     assert response is None
+
+
+def test_handle_resources_templates_list(server):
+    """Test handling resources/templates/list request."""
+    request = {
+        "jsonrpc": "2.0",
+        "id": 13,
+        "method": "resources/templates/list",
+        "params": {},
+    }
+
+    response = server.handle_request(request)
+    assert response["id"] == 13
+    assert "result" in response
+    assert "resourceTemplates" in response["result"]
+    templates = response["result"]["resourceTemplates"]
+    assert isinstance(templates, list)
+    assert len(templates) > 0
+    
+    # Check that templates have required fields
+    for template in templates:
+        assert "uriTemplate" in template
+        assert "name" in template
+        assert "description" in template
+        assert "mimeType" in template
+        # Verify URI template contains parameter placeholders
+        assert "{" in template["uriTemplate"]
+
+
+def test_resources_templates_structure(server):
+    """Test that resource templates follow MCP specification structure."""
+    result = server._list_resource_templates({})
+    
+    assert "resourceTemplates" in result
+    templates = result["resourceTemplates"]
+    
+    # Should have at least database query and info templates
+    assert len(templates) >= 2
+    
+    # Check for specific expected templates
+    uri_templates = [t["uriTemplate"] for t in templates]
+    assert any("database://{database_name}/query" in uri for uri in uri_templates)
+    assert any("database://{database_name}/info" in uri for uri in uri_templates)
+
