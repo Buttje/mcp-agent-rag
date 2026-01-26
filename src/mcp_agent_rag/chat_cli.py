@@ -50,8 +50,8 @@ class MCPClient:
             self.process.stdin.write(request_json.encode('utf-8'))
             self.process.stdin.flush()
 
-            # Read response - readline() reads until newline, no size limit
-            # Decode with explicit UTF-8 to handle special characters correctly
+            # Read response line by line with explicit UTF-8 decoding
+            # to handle special characters correctly
             response_line = self.process.stdout.readline().decode('utf-8').strip()
             if not response_line:
                 raise ConnectionError("MCP server closed connection")

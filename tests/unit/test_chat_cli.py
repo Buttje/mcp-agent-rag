@@ -130,8 +130,9 @@ def test_mcp_client_utf8_encoding():
         "id": 1,
         "result": {"context": text_with_umlauts, "citations": []},
     }
+    # Use the same JSON serialization as production code
     mock_process.stdout.readline.return_value = (
-        (json.dumps(response, ensure_ascii=False) + "\n").encode('utf-8')
+        (json.dumps(response) + "\n").encode('utf-8')
     )
 
     client = MCPClient(mock_process)
