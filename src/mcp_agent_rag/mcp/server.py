@@ -2,7 +2,11 @@
 
 import json
 import sys
+import threading
+import time
+from http.server import BaseHTTPRequestHandler, HTTPServer
 from typing import Any, Dict, List, Optional
+from urllib.parse import parse_qs, urlparse
 
 from mcp_agent_rag.config import Config
 from mcp_agent_rag.database import DatabaseManager
@@ -58,6 +62,12 @@ class MCPServer:
                 result = self._list_databases(params)
             elif method == "query/get_data":
                 result = self._query_data(params)
+            elif method == "getDatabases":
+                result = self._get_databases(params)
+            elif method == "getInformationFor":
+                result = self._get_information_for(params)
+            elif method == "getInformationForDB":
+                result = self._get_information_for_db(params)
             elif method == "resources/list":
                 result = self._list_resources(params)
             elif method == "tools/list":
@@ -167,6 +177,143 @@ class MCPServer:
             "databases_searched": context["databases_searched"],
         }
 
+    def _get_databases(self, params: Dict) -> Dict:
+        """Handle getDatabases - returns list of activated databases.
+        
+        Returns:
+            Dictionary containing list of active database names and their info
+        """
+        databases = []
+        for db_name in self.active_databases:
+            db_info = self.config.get_database(db_name)
+            if db_info:
+                databases.append({
+                    "name": db_name,
+                    "description": db_info.get("description", ""),
+                    "doc_count": db_info.get("doc_count", 0),
+                    "last_updated": db_info.get("last_updated", ""),
+                    "path": db_info.get("path", ""),
+                })
+        
+        return {
+            "databases": databases,
+            "count": len(databases),
+        }
+
+    def _get_information_for(self, params: Dict) -> Dict:
+        """Handle getInformationFor - returns information from all activated databases.
+        
+        Args:
+            params: Dictionary with 'prompt' parameter
+            
+        Returns:
+            Dictionary with context, citations, and databases searched
+        """
+        prompt = params.get("prompt")
+        if not prompt:
+            raise ValueError("Missing required parameter: prompt")
+
+        max_results = params.get("max_results", 5)
+
+        # Use agentic RAG to get context from all active databases
+        context = self.agent.get_context(prompt, max_results)
+
+        return {
+            "prompt": prompt,
+            "context": context["text"],
+            "citations": context["citations"],
+            "databases_searched": context["databases_searched"],
+        }
+
+    def _get_information_for_db(self, params: Dict) -> Dict:
+        """Handle getInformationForDB - returns information from specific database.
+        
+        Args:
+            params: Dictionary with 'prompt' and 'database_name' parameters
+            
+        Returns:
+            Dictionary with context, citations, and database searched
+        """
+        prompt = params.get("prompt")
+        database_name = params.get("database_name")
+        
+        if not prompt:
+            raise ValueError("Missing required parameter: prompt")
+        if not database_name:
+            raise ValueError("Missing required parameter: database_name")
+        
+        # Check if database is in active databases
+        if database_name not in self.active_databases:
+            raise ValueError(
+                f"Database '{database_name}' is not in active databases: "
+                f"{', '.join(self.active_databases)}"
+            )
+        
+        max_results = params.get("max_results", 5)
+        
+        # Get the specific database
+        if database_name not in self.loaded_databases:
+            raise ValueError(f"Database '{database_name}' is not loaded")
+        
+        db = self.loaded_databases[database_name]
+        
+        # Generate query embedding
+        query_embedding = self.agent.embedder.embed_single(prompt)
+        if not query_embedding:
+            logger.error("Failed to generate query embedding")
+            return {
+                "prompt": prompt,
+                "database": database_name,
+                "context": "",
+                "citations": [],
+            }
+        
+        # Search the specific database
+        results = db.search(query_embedding, k=max_results)
+        
+        # Process results
+        context_parts = []
+        citations = []
+        seen_sources = set()
+        total_length = 0
+        max_context_length = self.config.get("max_context_length", 4000)
+        
+        for distance, metadata in results:
+            source = metadata.get("source", "")
+            chunk_num = metadata.get("chunk_num", 0)
+            source_key = f"{source}:{chunk_num}"
+            
+            # Skip duplicates
+            if source_key in seen_sources:
+                continue
+            
+            chunk_text = metadata.get("text", "")
+            if not chunk_text:
+                continue
+            
+            # Check if adding this would exceed limit
+            if total_length + len(chunk_text) > max_context_length:
+                break
+            
+            context_parts.append(chunk_text)
+            citations.append({
+                "source": source,
+                "chunk": chunk_num,
+                "database": database_name,
+            })
+            seen_sources.add(source_key)
+            total_length += len(chunk_text)
+        
+        # Compose final context
+        context_text = "\n\n".join(context_parts)
+        
+        return {
+            "prompt": prompt,
+            "database": database_name,
+            "context": context_text,
+            "citations": citations,
+        }
+
     def _list_resources(self, params: Dict) -> Dict:
         """Handle resources/list."""
         resources = []
@@ -230,6 +377,56 @@ class MCPServer:
                         "required": ["prompt"],
                     },
                 },
+                {
+                    "name": "getDatabases",
+                    "description": "Get list of activated databases in the MCP RAG MCP server",
+                    "inputSchema": {
+                        "type": "object",
+                        "properties": {},
+                    },
+                },
+                {
+                    "name": "getInformationFor",
+                    "description": "Returns information by scanning through all activated databases",
+                    "inputSchema": {
+                        "type": "object",
+                        "properties": {
+                            "prompt": {
+                                "type": "string", 
+                                "description": "The query/prompt to search for"
+                            },
+                            "max_results": {
+                                "type": "integer", 
+                                "default": 5,
+                                "description": "Maximum number of results per database"
+                            },
+                        },
+                        "required": ["prompt"],
+                    },
+                },
+                {
+                    "name": "getInformationForDB",
+                    "description": "Returns information by scanning just the named database",
+                    "inputSchema": {
+                        "type": "object",
+                        "properties": {
+                            "prompt": {
+                                "type": "string",
+                                "description": "The query/prompt to search for"
+                            },
+                            "database_name": {
+                                "type": "string",
+                                "description": "Name of the database to search in"
+                            },
+                            "max_results": {
+                                "type": "integer",
+                                "default": 5,
+                                "description": "Maximum number of results"
+                            },
+                        },
+                        "required": ["prompt", "database_name"],
+                    },
+                },
             ]
         }
 
@@ -246,6 +443,12 @@ class MCPServer:
             return self._list_databases(arguments)
         elif name == "query/get_data":
             return self._query_data(arguments)
+        elif name == "getDatabases":
+            return self._get_databases(arguments)
+        elif name == "getInformationFor":
+            return self._get_information_for(arguments)
+        elif name == "getInformationForDB":
+            return self._get_information_for_db(arguments)
         else:
             raise ValueError(f"Unknown tool: {name}")
 
@@ -277,6 +480,210 @@ class MCPServer:
                     error_response = self._error_response(None, -32700, "Parse error")
                     print(json.dumps(error_response), flush=True)
 
+        except KeyboardInterrupt:
+            logger.info("Server stopped by user")
+        except Exception as e:
+            logger.error(f"Server error: {e}", exc_info=True)
+
+    def run_http(self, host: str = "127.0.0.1", port: int = 8080) -> None:
+        """Run server with HTTP transport.
+        
+        Args:
+            host: Host to bind to
+            port: Port to bind to
+        """
+        logger.info(f"MCP server starting with HTTP transport on {host}:{port}")
+        logger.info(f"Active databases: {', '.join(self.active_databases)}")
+
+        # Create request handler class with access to server instance
+        server_instance = self
+
+        class MCPHTTPHandler(BaseHTTPRequestHandler):
+            """HTTP request handler for MCP server."""
+
+            def do_POST(self):
+                """Handle POST requests."""
+                try:
+                    # Read request body
+                    content_length = int(self.headers.get('Content-Length', 0))
+                    body = self.rfile.read(content_length)
+                    
+                    # Parse JSON-RPC request
+                    request = json.loads(body.decode('utf-8'))
+                    
+                    # Handle request
+                    response = server_instance.handle_request(request)
+                    
+                    # Send response
+                    self.send_response(200)
+                    self.send_header('Content-Type', 'application/json')
+                    self.send_header('Access-Control-Allow-Origin', '*')
+                    self.end_headers()
+                    self.wfile.write(json.dumps(response).encode('utf-8'))
+                    
+                except json.JSONDecodeError as e:
+                    logger.error(f"Invalid JSON: {e}")
+                    error_response = server_instance._error_response(
+                        None, -32700, "Parse error"
+                    )
+                    self.send_response(400)
+                    self.send_header('Content-Type', 'application/json')
+                    self.end_headers()
+                    self.wfile.write(json.dumps(error_response).encode('utf-8'))
+                    
+                except Exception as e:
+                    logger.error(f"Error handling request: {e}", exc_info=True)
+                    error_response = server_instance._error_response(
+                        None, -32603, f"Internal error: {str(e)}"
+                    )
+                    self.send_response(500)
+                    self.send_header('Content-Type', 'application/json')
+                    self.end_headers()
+                    self.wfile.write(json.dumps(error_response).encode('utf-8'))
+
+            def do_OPTIONS(self):
+                """Handle OPTIONS requests for CORS."""
+                self.send_response(200)
+                self.send_header('Access-Control-Allow-Origin', '*')
+                self.send_header('Access-Control-Allow-Methods', 'POST, GET, OPTIONS')
+                self.send_header('Access-Control-Allow-Headers', 'Content-Type')
+                self.end_headers()
+
+            def do_GET(self):
+                """Handle GET requests."""
+                # Health check endpoint
+                if self.path == '/health':
+                    self.send_response(200)
+                    self.send_header('Content-Type', 'application/json')
+                    self.end_headers()
+                    health = {
+                        "status": "ok",
+                        "active_databases": server_instance.active_databases,
+                    }
+                    self.wfile.write(json.dumps(health).encode('utf-8'))
+                else:
+                    self.send_response(404)
+                    self.end_headers()
+
+            def log_message(self, format, *args):
+                """Override to use our logger."""
+                logger.info(f"{self.address_string()} - {format % args}")
+
+        # Create and start HTTP server
+        try:
+            httpd = HTTPServer((host, port), MCPHTTPHandler)
+            logger.info(f"HTTP server listening on {host}:{port}")
+            httpd.serve_forever()
+        except KeyboardInterrupt:
+            logger.info("Server stopped by user")
+        except Exception as e:
+            logger.error(f"Server error: {e}", exc_info=True)
+
+    def run_sse(self, host: str = "127.0.0.1", port: int = 8080) -> None:
+        """Run server with SSE (Server-Sent Events) transport.
+        
+        SSE is deprecated in favor of streamable HTTP but provided for backwards compatibility.
+        
+        Args:
+            host: Host to bind to
+            port: Port to bind to
+        """
+        logger.info(f"MCP server starting with SSE transport on {host}:{port}")
+        logger.info(f"Active databases: {', '.join(self.active_databases)}")
+        logger.warning("SSE transport is deprecated. Consider using HTTP transport instead.")
+
+        server_instance = self
+
+        class MCPSSEHandler(BaseHTTPRequestHandler):
+            """SSE request handler for MCP server."""
+
+            def do_POST(self):
+                """Handle POST requests for sending messages."""
+                try:
+                    content_length = int(self.headers.get('Content-Length', 0))
+                    body = self.rfile.read(content_length)
+                    request = json.loads(body.decode('utf-8'))
+                    
+                    # Handle request
+                    response = server_instance.handle_request(request)
+                    
+                    # Send response as HTTP 200 with JSON
+                    self.send_response(200)
+                    self.send_header('Content-Type', 'application/json')
+                    self.send_header('Access-Control-Allow-Origin', '*')
+                    self.end_headers()
+                    self.wfile.write(json.dumps(response).encode('utf-8'))
+                    
+                except Exception as e:
+                    logger.error(f"Error handling request: {e}", exc_info=True)
+                    error_response = server_instance._error_response(
+                        None, -32603, f"Internal error: {str(e)}"
+                    )
+                    self.send_response(500)
+                    self.send_header('Content-Type', 'application/json')
+                    self.end_headers()
+                    self.wfile.write(json.dumps(error_response).encode('utf-8'))
+
+            def do_GET(self):
+                """Handle GET requests for SSE stream."""
+                # SSE endpoint
+                if self.path == '/sse':
+                    self.send_response(200)
+                    self.send_header('Content-Type', 'text/event-stream')
+                    self.send_header('Cache-Control', 'no-cache')
+                    self.send_header('Connection', 'keep-alive')
+                    self.send_header('Access-Control-Allow-Origin', '*')
+                    self.end_headers()
+                    
+                    # Send initial connection message
+                    event_data = json.dumps({
+                        "type": "connection",
+                        "message": "Connected to MCP server",
+                        "active_databases": server_instance.active_databases,
+                    })
+                    self.wfile.write(f"data: {event_data}\n\n".encode('utf-8'))
+                    self.wfile.flush()
+                    
+                    # Keep connection alive
+                    try:
+                        while True:
+                            time.sleep(30)  # Send keepalive every 30 seconds
+                            self.wfile.write(": keepalive\n\n".encode('utf-8'))
+                            self.wfile.flush()
+                    except Exception:
+                        pass
+                        
+                # Health check endpoint
+                elif self.path == '/health':
+                    self.send_response(200)
+                    self.send_header('Content-Type', 'application/json')
+                    self.end_headers()
+                    health = {
+                        "status": "ok",
+                        "active_databases": server_instance.active_databases,
+                    }
+                    self.wfile.write(json.dumps(health).encode('utf-8'))
+                else:
+                    self.send_response(404)
+                    self.end_headers()
+
+            def do_OPTIONS(self):
+                """Handle OPTIONS requests for CORS."""
+                self.send_response(200)
+                self.send_header('Access-Control-Allow-Origin', '*')
+                self.send_header('Access-Control-Allow-Methods', 'POST, GET, OPTIONS')
+                self.send_header('Access-Control-Allow-Headers', 'Content-Type')
+                self.end_headers()
+
+            def log_message(self, format, *args):
+                """Override to use our logger."""
+                logger.info(f"{self.address_string()} - {format % args}")
+
+        # Create and start SSE server
+        try:
+            httpd = HTTPServer((host, port), MCPSSEHandler)
+            logger.info(f"SSE server listening on {host}:{port}")
+            httpd.serve_forever()
         except KeyboardInterrupt:
             logger.info("Server stopped by user")
         except Exception as e:
