@@ -88,9 +88,7 @@ mcp-rag database list
 mcp-rag server start --active-databases mydb --transport stdio
 ```
 
-### Interactive Chat Clients
-
-#### MCP-RAG CLI (Recommended)
+### Interactive Chat Client
 
 The **mcp-rag-cli** uses the AGNO agent framework and communicates with an MCP server:
 
@@ -132,14 +130,6 @@ Sources:
 
 You: quit
 Goodbye!
-```
-
-#### Direct Chat Client (Legacy)
-
-The **mcp-rag-chat** directly uses RAG components without starting an MCP server:
-
-```bash
-mcp-rag-chat
 ```
 
 ## MCP Tools

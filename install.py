@@ -182,6 +182,8 @@ def main():
     print("Dependencies installed")
 
     # Configuration
+    config_path = Path.home() / ".mcp-agent-rag" / "config.json"
+    
     if args.config:
         print(f"\nUsing existing config: {args.config}")
         config_path = Path(args.config)
@@ -189,15 +191,22 @@ def main():
             print(f"Error: Config file not found: {args.config}")
             sys.exit(1)
     else:
-        print("\nSetting up configuration...")
-        config = create_config(args.no_prompt)
-        config_path = Path.home() / ".mcp-agent-rag" / "config.json"
         config_path.parent.mkdir(parents=True, exist_ok=True)
+        
+        if config_path.exists():
+            print(f"\nExisting configuration found at: {config_path}")
+            print("Preserving existing configuration...")
+            with open(config_path, "r") as f:
+                config = json.load(f)
+            print("Configuration preserved")
+        else:
+            print("\nSetting up configuration...")
+            config = create_config(args.no_prompt)
 
-        with open(config_path, "w") as f:
-            json.dump(config, f, indent=2)
+            with open(config_path, "w") as f:
+                json.dump(config, f, indent=2)
 
-        print(f"Configuration saved to: {config_path}")
+            print(f"Configuration saved to: {config_path}")
 
     print("\n" + "=" * 60)
     print("Installation complete!")
