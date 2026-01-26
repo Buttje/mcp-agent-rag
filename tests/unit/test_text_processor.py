@@ -89,3 +89,19 @@ def test_chunk_text_sentence_boundary():
     # Many chunks should end with a period
     period_endings = sum(1 for chunk, _ in chunks if chunk.rstrip().endswith("."))
     assert period_endings > 0
+
+
+def test_chunk_text_paragraph_boundary():
+    """Test chunking respects paragraph boundaries without truncating words."""
+    # Create text with a paragraph break that should trigger the boundary logic
+    # The word "Historischer" should not be truncated to "ischer"
+    text = "First paragraph. " * 10 + "\n\n" + "Historischer Mann was a farmer."
+    chunks = text_proc.chunk_text(text, chunk_size=100, overlap=20)
+    
+    # Verify that "Historischer" appears in full in at least one chunk
+    all_text = " ".join(chunk for chunk, _ in chunks)
+    assert "Historischer" in all_text
+    
+    # Verify no chunk starts with "ischer" (truncated form)
+    for chunk_text, _ in chunks:
+        assert not chunk_text.startswith("ischer")

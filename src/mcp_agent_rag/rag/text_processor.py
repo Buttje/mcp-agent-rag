@@ -63,7 +63,7 @@ def chunk_text(
             # Look for paragraph break
             last_para = chunk.rfind("\n\n")
             if last_para > chunk_size // 2:
-                end = start + last_para
+                end = start + last_para + 2  # Add 2 for the "\n\n" length
                 chunk = text[start:end]
             else:
                 # Look for sentence break
