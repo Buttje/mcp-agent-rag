@@ -45,10 +45,6 @@ dev = [
     "ruff>=0.1.0",
 ]
 
-[project.scripts]
-mcp-rag = "mcp_agent_rag.cli:main"
-mcp-rag-cli = "mcp_agent_rag.chat_cli:main"
-
 [tool.setuptools.packages.find]
 where = ["src"]
 

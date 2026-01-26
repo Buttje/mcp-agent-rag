@@ -125,14 +125,14 @@ python install.py
 3. Test database operations:
 ```bash
 source .venv/bin/activate
-mcp-rag database create --name testdb --description "Test database"
-mcp-rag database add --database testdb --path docs/ --recursive
-mcp-rag database list
+python mcp-rag.py database create --name testdb --description "Test database"
+python mcp-rag.py database add --database testdb --path docs/ --recursive
+python mcp-rag.py database list
 ```
 
 4. Test server:
 ```bash
-mcp-rag server start --active-databases testdb --transport stdio
+python mcp-rag.py server start --active-databases testdb --transport stdio
 ```
 
 ## Known Limitations

@@ -223,16 +223,16 @@ source .venv/bin/activate
 ### Basic Usage
 ```bash
 # Create database
-mcp-rag database create --name mydb
+python mcp-rag.py database create --name mydb
 
 # Add documents
-mcp-rag database add --database mydb --path ~/docs --recursive
+python mcp-rag.py database add --database mydb --path ~/docs --recursive
 
 # List databases
-mcp-rag database list
+python mcp-rag.py database list
 
 # Start server
-mcp-rag server start --active-databases mydb
+python mcp-rag.py server start --active-databases mydb
 ```
 
 ---
