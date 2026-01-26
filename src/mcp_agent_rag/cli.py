@@ -58,8 +58,8 @@ def main():
     start_parser.add_argument(
         "--transport",
         default="stdio",
-        choices=["stdio", "http"],
-        help="Transport protocol",
+        choices=["stdio", "http", "sse"],
+        help="Transport protocol (stdio, http, or sse)",
     )
     start_parser.add_argument("--host", default="127.0.0.1", help="HTTP host")
     start_parser.add_argument("--port", type=int, default=8080, help="HTTP port")
@@ -164,8 +164,9 @@ def handle_server_command(args, config: Config, logger):
             if args.transport == "stdio":
                 server.run_stdio()
             elif args.transport == "http":
-                print(f"HTTP transport not yet implemented", file=sys.stderr)
-                sys.exit(1)
+                server.run_http(host=args.host, port=args.port)
+            elif args.transport == "sse":
+                server.run_sse(host=args.host, port=args.port)
 
         except Exception as e:
             logger.error(f"Failed to start server: {e}", exc_info=True)
