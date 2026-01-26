@@ -33,11 +33,11 @@ def test_server_initialization(server):
 
 
 def test_handle_database_create(server):
-    """Test handling database/create request."""
+    """Test handling database-create request."""
     request = {
         "jsonrpc": "2.0",
         "id": 1,
-        "method": "database/create",
+        "method": "database-create",
         "params": {"name": "newdb", "description": "New database"},
     }
 
@@ -48,11 +48,11 @@ def test_handle_database_create(server):
 
 
 def test_handle_database_list(server):
-    """Test handling database/list request."""
+    """Test handling database-list request."""
     request = {
         "jsonrpc": "2.0",
         "id": 2,
-        "method": "database/list",
+        "method": "database-list",
         "params": {},
     }
 
@@ -63,14 +63,14 @@ def test_handle_database_list(server):
 
 
 def test_handle_query_get_data(server):
-    """Test handling query/get_data request."""
+    """Test handling query-get_data request."""
     with patch.object(server.agent.embedder, "embed_single") as mock_embed:
         mock_embed.return_value = [0.1] * 768
 
         request = {
             "jsonrpc": "2.0",
             "id": 3,
-            "method": "query/get_data",
+            "method": "query-get_data",
             "params": {"prompt": "test query", "max_results": 5},
         }
 
@@ -118,7 +118,7 @@ def test_handle_tools_call(server):
         "id": 6,
         "method": "tools/call",
         "params": {
-            "name": "database/list",
+            "name": "database-list",
             "arguments": {},
         },
     }
@@ -148,7 +148,7 @@ def test_handle_error_in_request(server):
     request = {
         "jsonrpc": "2.0",
         "id": 8,
-        "method": "database/create",
+        "method": "database-create",
         "params": {},  # Missing required 'name' parameter
     }
 
@@ -163,7 +163,7 @@ def test_create_database_already_exists(server):
     request = {
         "jsonrpc": "2.0",
         "id": 9,
-        "method": "database/create",
+        "method": "database-create",
         "params": {"name": "testdb"},
     }
 
@@ -177,7 +177,7 @@ def test_add_documents_nonexistent_database(server):
     request = {
         "jsonrpc": "2.0",
         "id": 10,
-        "method": "database/add",
+        "method": "database-add",
         "params": {"database_name": "nonexistent", "path": "/tmp"},
     }
 
@@ -491,3 +491,64 @@ def test_get_information_for_db_missing_database_name(server):
     assert "database_name" in response["error"]["message"].lower()
 
 
+def test_handle_logging_set_level(server):
+    """Test handling logging/setLevel request."""
+    request = {
+        "jsonrpc": "2.0",
+        "id": 23,
+        "method": "logging/setLevel",
+        "params": {"level": "info"},
+    }
+
+    response = server.handle_request(request)
+    assert response["id"] == 23
+    assert "result" in response
+    assert response["result"] == {}
+
+
+def test_logging_set_level_invalid(server):
+    """Test logging/setLevel with invalid level."""
+    request = {
+        "jsonrpc": "2.0",
+        "id": 24,
+        "method": "logging/setLevel",
+        "params": {"level": "invalid_level"},
+    }
+
+    response = server.handle_request(request)
+    assert response["id"] == 24
+    assert "error" in response
+    assert "invalid" in response["error"]["message"].lower()
+
+
+def test_logging_set_level_missing_param(server):
+    """Test logging/setLevel with missing level parameter."""
+    request = {
+        "jsonrpc": "2.0",
+        "id": 25,
+        "method": "logging/setLevel",
+        "params": {},
+    }
+
+    response = server.handle_request(request)
+    assert response["id"] == 25
+    assert "error" in response
+    assert "level" in response["error"]["message"].lower()
+
+
+def test_logging_set_level_all_valid_levels(server):
+    """Test logging/setLevel with all valid levels."""
+    valid_levels = ["debug", "info", "notice", "warning", "error", "critical", "alert", "emergency"]
+    
+    for i, level in enumerate(valid_levels):
+        request = {
+            "jsonrpc": "2.0",
+            "id": 26 + i,
+            "method": "logging/setLevel",
+            "params": {"level": level},
+        }
+
+        response = server.handle_request(request)
+        assert response["id"] == 26 + i
+        assert "result" in response
+        assert response["result"] == {}
