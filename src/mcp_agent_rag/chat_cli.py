@@ -112,7 +112,7 @@ def start_mcp_server(config: Config, active_databases: list[str]) -> subprocess.
             stdin=subprocess.PIPE,
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
-            bufsize=0,
+            bufsize=1,  # Line-buffered to prevent truncation
         )
 
         # Give server time to start
