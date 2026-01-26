@@ -15,6 +15,9 @@ from mcp_agent_rag.utils import get_logger
 
 logger = get_logger(__name__)
 
+# MCP Protocol Constants
+MCP_PROTOCOL_VERSION = "2025-11-25"
+
 
 class MCPServer:
     """Model Context Protocol server."""
@@ -55,7 +58,7 @@ class MCPServer:
         Returns:
             Dictionary with server's protocol version, capabilities, and info
         """
-        client_version = params.get("protocolVersion", "2025-11-25")
+        client_version = params.get("protocolVersion", MCP_PROTOCOL_VERSION)
         client_capabilities = params.get("capabilities", {})
         client_info = params.get("clientInfo", {})
         
@@ -79,7 +82,7 @@ class MCPServer:
         }
         
         return {
-            "protocolVersion": "2025-11-25",  # The protocol version we support
+            "protocolVersion": MCP_PROTOCOL_VERSION,
             "capabilities": server_capabilities,
             "serverInfo": {
                 "name": "mcp-agent-rag",
@@ -95,7 +98,7 @@ class MCPServer:
             request: JSON-RPC request
 
         Returns:
-            JSON-RPC response
+            JSON-RPC response (or None for notifications)
         """
         try:
             method = request.get("method")
@@ -105,9 +108,12 @@ class MCPServer:
             # Handle initialize - required by MCP spec
             if method == "initialize":
                 result = self._initialize(params)
-            # Handle initialized notification - no response needed
-            elif method == "notifications/initialized":
-                logger.info("Client initialized successfully")
+            # Handle notifications - no response needed
+            elif method and method.startswith("notifications/"):
+                notification_type = method.split("/", 1)[1]
+                logger.info(f"Received notification: {notification_type}")
+                if notification_type == "initialized":
+                    logger.info("Client initialized successfully")
                 return None  # Notifications don't get responses
             elif method == "database/create":
                 result = self._create_database(params)

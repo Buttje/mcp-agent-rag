@@ -235,3 +235,16 @@ def test_initialize_minimal_params(server):
     assert "protocolVersion" in response["result"]
     assert "capabilities" in response["result"]
     assert "serverInfo" in response["result"]
+
+
+def test_custom_notification_handling(server):
+    """Test that any notification with notifications/ prefix returns None."""
+    request = {
+        "jsonrpc": "2.0",
+        "method": "notifications/custom_event",
+        "params": {"data": "test"},
+    }
+
+    response = server.handle_request(request)
+    # Notifications should return None
+    assert response is None
