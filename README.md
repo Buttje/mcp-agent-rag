@@ -88,58 +88,58 @@ mcp-rag database list
 mcp-rag server start --active-databases mydb --transport stdio
 ```
 
-### Interactive Chat Client
+### Interactive Chat Clients
 
-Start an interactive chat session with your documents:
+#### MCP-RAG CLI (Recommended)
+
+The **mcp-rag-cli** uses the AGNO agent framework and communicates with an MCP server:
 
 ```bash
-mcp-rag-chat
+mcp-rag-cli
 ```
 
-The chat client will:
+The CLI client will:
 1. Display all available databases
-2. Let you select which database to use
-3. Start an interactive chat session where you can ask questions
-4. Retrieve relevant context from your documents
-5. Generate answers using Ollama with citations
-
-**Chat Commands:**
-- Type your questions naturally
-- `quit`, `exit`, or `/q` to exit
-- `Ctrl+C` to interrupt
+2. Let you select which database(s) to use (single, multiple, or all)
+3. **Start an MCP server** with the selected databases
+4. Initialize an AGNO agent with MCP tools
+5. Start an interactive chat session where you can ask questions
+6. Query the MCP server to retrieve relevant context from your documents
+7. Properly shut down the MCP server when you exit
 
 **Example Session:**
 ```
-$ mcp-rag-chat
-
-======================================================================
-MCP-RAG Chat Client
-======================================================================
+$ mcp-rag-cli
 
 Available databases:
   1. mydb (42 documents)
      My document collection
 
-Select database (number or name, or 'q' to quit): 1
+Select database(s) (number, name, or 'all'): 1
 
-Loading database: mydb
-Using model: mistral:7b-instruct
+Starting MCP server...
+MCP server started successfully!
 
-Chat started! Type your questions below.
-Commands: 'quit', 'exit', '/q' to exit
+Chat started! Type 'quit', 'exit', or '/q' to exit
 ======================================================================
 
 You: What is Python used for?
-Searching...
-Assistant: Python is used for web development, data analysis, machine learning, 
-automation, and scientific computing. Popular frameworks include Django for web 
-development, NumPy for numerical computing, and TensorFlow for machine learning.
+Searching databases...
+Assistant: Python is used for web development...
 
 Sources:
   - /path/to/python-intro.txt
 
 You: quit
 Goodbye!
+```
+
+#### Direct Chat Client (Legacy)
+
+The **mcp-rag-chat** directly uses RAG components without starting an MCP server:
+
+```bash
+mcp-rag-chat
 ```
 
 ## MCP Tools

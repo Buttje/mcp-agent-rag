@@ -4,7 +4,7 @@ import json
 import subprocess
 import sys
 import time
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 from agno.agent import Agent
 
@@ -26,7 +26,7 @@ class MCPClient:
         self.request_id = 0
         self.logger = get_logger(__name__)
 
-    def call_tool(self, tool_name: str, arguments: Dict[str, Any]) -> Dict[str, Any]:
+    def call_tool(self, tool_name: str, arguments: dict[str, Any]) -> dict[str, Any]:
         """Call a tool on the MCP server.
 
         Args:
@@ -78,7 +78,7 @@ class MCPClient:
             self.process.wait()
 
 
-def start_mcp_server(config: Config, active_databases: List[str]) -> subprocess.Popen:
+def start_mcp_server(config: Config, active_databases: list[str]) -> subprocess.Popen:
     """Start the MCP server as a subprocess.
 
     Args:
@@ -254,7 +254,8 @@ def main():
 
                 if not selected_databases:
                     print(
-                        f"Invalid selection. Please enter 1-{len(db_list)}, database names, or 'all'"
+                        "Invalid selection. Please enter 1-"
+                        f"{len(db_list)}, database names, or 'all'"
                     )
 
         except KeyboardInterrupt:
@@ -289,7 +290,8 @@ def main():
         # Initialize AGNO agent
         # Note: AGNO Agent can work without a model if we only use tools
         # For actual LLM integration, we'd need to configure Ollama integration
-        agent = Agent(
+        # Currently, we'll use the agent infrastructure but call tools directly
+        _agent = Agent(
             name="MCP-RAG Assistant",
             description="An AI assistant that can query document databases via MCP server",
             instructions=[
