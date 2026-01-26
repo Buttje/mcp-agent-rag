@@ -87,6 +87,35 @@ def test_create_mcp_tool_query_data():
     )
 
 
+def test_mcp_client_no_truncation():
+    """Test that MCP client handles long responses without truncation."""
+    mock_process = Mock()
+    mock_process.stdin = Mock()
+    mock_process.stdout = Mock()
+    mock_process.poll.return_value = None
+
+    # Create a response with long text that would be prone to truncation
+    # Repeat text multiple times to simulate a long response
+    base_text = "Graufell ist ein mächtischer Mann, der einst ein Bauer aus Helmark war. "
+    repeat_count = 10
+    long_text = base_text * repeat_count
+    response = {
+        "jsonrpc": "2.0",
+        "id": 1,
+        "result": {"context": long_text, "citations": []},
+    }
+    mock_process.stdout.readline.return_value = (
+        (json.dumps(response) + "\n").encode()
+    )
+
+    client = MCPClient(mock_process)
+    result = client.call_tool("query/get_data", {"prompt": "test"})
+
+    # Verify the full text is returned without truncation
+    assert result["context"] == long_text
+    assert result["context"].startswith("Graufell ist ein mächtischer Mann")
+
+
 def test_chat_cli_main_no_databases(test_config, capsys):
     """Test chat CLI main with no databases."""
     with patch("mcp_agent_rag.chat_cli.Config") as mock_config_class:
