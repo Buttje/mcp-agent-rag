@@ -75,7 +75,7 @@ def fetch_ollama_models(host: str, timeout: int = 5) -> Tuple[List[str], List[st
         return [], [], f"Error fetching models: {str(e)}"
 
 
-def test_ollama_connection(host: str, timeout: int = 5) -> Tuple[bool, str]:
+def check_ollama_connection(host: str, timeout: int = 5) -> Tuple[bool, str]:
     """Test connection to Ollama server.
     
     Args:

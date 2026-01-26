@@ -17,7 +17,7 @@ except ImportError:
     requests = None
 
 
-def test_ollama_connection(host: str, timeout: int = 5) -> Tuple[bool, str]:
+def check_ollama_connection(host: str, timeout: int = 5) -> Tuple[bool, str]:
     """Test connection to Ollama server.
     
     Args:
@@ -239,7 +239,7 @@ def create_config(no_prompt: bool) -> dict:
     
     # Test connection and fetch available models
     print(f"\nTesting connection to {config['ollama_host']}...")
-    success, error = test_ollama_connection(config['ollama_host'])
+    success, error = check_ollama_connection(config['ollama_host'])
     
     embedding_models = []
     generative_models = []
