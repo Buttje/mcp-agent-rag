@@ -131,6 +131,8 @@ class MCPServer:
                 result = self._get_information_for_db(params)
             elif method == "resources/list":
                 result = self._list_resources(params)
+            elif method == "resources/templates/list":
+                result = self._list_resource_templates(params)
             elif method == "tools/list":
                 result = self._list_tools(params)
             elif method == "tools/call":
@@ -388,6 +390,40 @@ class MCPServer:
                     "mimeType": "application/x-faiss-index",
                 })
         return {"resources": resources}
+
+    def _list_resource_templates(self, params: Dict) -> Dict:
+        """Handle resources/templates/list.
+        
+        Returns resource templates that allow clients to discover
+        parameterized resources according to MCP specification.
+        
+        Args:
+            params: Optional parameters (e.g., cursor for pagination)
+            
+        Returns:
+            Dictionary containing list of resource templates
+        """
+        # Define resource templates for dynamic resource discovery
+        # These follow the MCP specification for resource templates
+        resource_templates = []
+        
+        # Template for querying specific databases
+        resource_templates.append({
+            "uriTemplate": "database://{database_name}/query",
+            "name": "Database Query Template",
+            "description": "Template for querying a specific database by name",
+            "mimeType": "application/json",
+        })
+        
+        # Template for accessing database information
+        resource_templates.append({
+            "uriTemplate": "database://{database_name}/info",
+            "name": "Database Info Template", 
+            "description": "Template for accessing metadata and information about a specific database",
+            "mimeType": "application/json",
+        })
+        
+        return {"resourceTemplates": resource_templates}
 
     def _list_tools(self, params: Dict) -> Dict:
         """Handle tools/list."""

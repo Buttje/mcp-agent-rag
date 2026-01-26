@@ -275,6 +275,49 @@ class TestHTTPTransport:
             except requests.exceptions.RequestException as e:
                 pytest.skip(f"HTTP server not available: {e}")
 
+    def test_http_resources_templates_list(self, test_server):
+        """Test resources/templates/list via HTTP."""
+        port = 18089
+        
+        server_thread = threading.Thread(
+            target=test_server.run_http,
+            args=("127.0.0.1", port),
+            daemon=True,
+        )
+        server_thread.start()
+        time.sleep(1)
+        
+        try:
+            request_data = {
+                "jsonrpc": "2.0",
+                "id": 4,
+                "method": "resources/templates/list",
+                "params": {},
+            }
+            
+            response = requests.post(
+                f"http://127.0.0.1:{port}/",
+                json=request_data,
+                timeout=2,
+            )
+            
+            assert response.status_code == 200
+            data = response.json()
+            
+            assert "result" in data
+            assert "resourceTemplates" in data["result"]
+            templates = data["result"]["resourceTemplates"]
+            assert len(templates) > 0
+            
+            # Check template structure
+            for template in templates:
+                assert "uriTemplate" in template
+                assert "name" in template
+                assert "description" in template
+                assert "{" in template["uriTemplate"]  # Has parameters
+        except requests.exceptions.RequestException as e:
+            pytest.skip(f"HTTP server not available: {e}")
+
 
 class TestSSETransport:
     """Tests for SSE (Server-Sent Events) transport."""

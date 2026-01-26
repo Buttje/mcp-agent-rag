@@ -248,3 +248,218 @@ def test_custom_notification_handling(server):
     response = server.handle_request(request)
     # Notifications should return None
     assert response is None
+
+
+def test_handle_resources_templates_list(server):
+    """Test handling resources/templates/list request."""
+    request = {
+        "jsonrpc": "2.0",
+        "id": 13,
+        "method": "resources/templates/list",
+        "params": {},
+    }
+
+    response = server.handle_request(request)
+    assert response["id"] == 13
+    assert "result" in response
+    assert "resourceTemplates" in response["result"]
+    templates = response["result"]["resourceTemplates"]
+    assert isinstance(templates, list)
+    assert len(templates) > 0
+    
+    # Check that templates have required fields
+    for template in templates:
+        assert "uriTemplate" in template
+        assert "name" in template
+        assert "description" in template
+        assert "mimeType" in template
+        # Verify URI template contains parameter placeholders
+        assert "{" in template["uriTemplate"]
+
+
+def test_resources_templates_structure(server):
+    """Test that resource templates follow MCP specification structure."""
+    result = server._list_resource_templates({})
+    
+    assert "resourceTemplates" in result
+    templates = result["resourceTemplates"]
+    
+    # Should have at least database query and info templates
+    assert len(templates) >= 2
+    
+    # Check for specific expected templates
+    uri_templates = [t["uriTemplate"] for t in templates]
+    assert any("database://{database_name}/query" in uri for uri in uri_templates)
+    assert any("database://{database_name}/info" in uri for uri in uri_templates)
+
+
+def test_handle_get_databases(server):
+    """Test handling getDatabases request."""
+    request = {
+        "jsonrpc": "2.0",
+        "id": 14,
+        "method": "getDatabases",
+        "params": {},
+    }
+
+    response = server.handle_request(request)
+    assert response["id"] == 14
+    assert "result" in response
+    assert "databases" in response["result"]
+    assert "count" in response["result"]
+    assert response["result"]["count"] == 1
+    assert response["result"]["databases"][0]["name"] == "testdb"
+
+
+def test_get_databases_via_tools_call(server):
+    """Test calling getDatabases via tools/call method."""
+    request = {
+        "jsonrpc": "2.0",
+        "id": 15,
+        "method": "tools/call",
+        "params": {
+            "name": "getDatabases",
+            "arguments": {},
+        },
+    }
+
+    response = server.handle_request(request)
+    assert response["id"] == 15
+    assert "result" in response
+    assert "databases" in response["result"]
+    assert response["result"]["count"] == 1
+
+
+def test_handle_get_information_for(server):
+    """Test handling getInformationFor request."""
+    with patch.object(server.agent.embedder, "embed_single") as mock_embed:
+        mock_embed.return_value = [0.1] * 768
+
+        request = {
+            "jsonrpc": "2.0",
+            "id": 16,
+            "method": "getInformationFor",
+            "params": {"prompt": "test query", "max_results": 5},
+        }
+
+        response = server.handle_request(request)
+        assert response["id"] == 16
+        assert "result" in response
+        assert "context" in response["result"]
+        assert "citations" in response["result"]
+        assert "databases_searched" in response["result"]
+
+
+def test_get_information_for_via_tools_call(server):
+    """Test calling getInformationFor via tools/call method."""
+    with patch.object(server.agent.embedder, "embed_single") as mock_embed:
+        mock_embed.return_value = [0.1] * 768
+
+        request = {
+            "jsonrpc": "2.0",
+            "id": 17,
+            "method": "tools/call",
+            "params": {
+                "name": "getInformationFor",
+                "arguments": {"prompt": "test query"},
+            },
+        }
+
+        response = server.handle_request(request)
+        assert response["id"] == 17
+        assert "result" in response
+        assert "context" in response["result"]
+
+
+def test_handle_get_information_for_db(server):
+    """Test handling getInformationForDB request."""
+    with patch.object(server.agent.embedder, "embed_single") as mock_embed:
+        mock_embed.return_value = [0.1] * 768
+
+        request = {
+            "jsonrpc": "2.0",
+            "id": 18,
+            "method": "getInformationForDB",
+            "params": {
+                "prompt": "test query",
+                "database_name": "testdb",
+                "max_results": 5,
+            },
+        }
+
+        response = server.handle_request(request)
+        assert response["id"] == 18
+        assert "result" in response
+        assert "context" in response["result"]
+        assert "citations" in response["result"]
+        assert "database" in response["result"]
+        assert response["result"]["database"] == "testdb"
+
+
+def test_get_information_for_db_via_tools_call(server):
+    """Test calling getInformationForDB via tools/call method."""
+    with patch.object(server.agent.embedder, "embed_single") as mock_embed:
+        mock_embed.return_value = [0.1] * 768
+
+        request = {
+            "jsonrpc": "2.0",
+            "id": 19,
+            "method": "tools/call",
+            "params": {
+                "name": "getInformationForDB",
+                "arguments": {"prompt": "test query", "database_name": "testdb"},
+            },
+        }
+
+        response = server.handle_request(request)
+        assert response["id"] == 19
+        assert "result" in response
+        assert "context" in response["result"]
+        assert "database" in response["result"]
+
+
+def test_get_information_for_db_invalid_database(server):
+    """Test getInformationForDB with invalid database name."""
+    request = {
+        "jsonrpc": "2.0",
+        "id": 20,
+        "method": "getInformationForDB",
+        "params": {"prompt": "test query", "database_name": "nonexistent"},
+    }
+
+    response = server.handle_request(request)
+    assert response["id"] == 20
+    assert "error" in response
+    assert "not in active databases" in response["error"]["message"]
+
+
+def test_get_information_for_missing_prompt(server):
+    """Test getInformationFor with missing prompt parameter."""
+    request = {
+        "jsonrpc": "2.0",
+        "id": 21,
+        "method": "getInformationFor",
+        "params": {},
+    }
+
+    response = server.handle_request(request)
+    assert response["id"] == 21
+    assert "error" in response
+    assert "prompt" in response["error"]["message"].lower()
+
+
+def test_get_information_for_db_missing_database_name(server):
+    """Test getInformationForDB with missing database_name parameter."""
+    request = {
+        "jsonrpc": "2.0",
+        "id": 22,
+        "method": "getInformationForDB",
+        "params": {"prompt": "test query"},
+    }
+
+    response = server.handle_request(request)
+    assert response["id"] == 22
+    assert "error" in response
+    assert "database_name" in response["error"]["message"].lower()
+
+

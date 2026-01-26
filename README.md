@@ -12,9 +12,10 @@ A Python implementation of a Model Context Protocol (MCP) server that provides r
 - **MCP Compliance**: Full JSON-RPC server implementing Model Context Protocol (2025-11-25)
 - **Multiple Transport Protocols**: Support for stdio, HTTP, and SSE transports
 - **Required MCP Tools**: `getDatabases()`, `getInformationFor()`, `getInformationForDB()`
+- **Resource Templates**: Dynamic resource discovery via `resources/templates/list`
 - **CLI Interface**: Easy-to-use command-line tools for database and server management
 - **Cross-Platform**: Works on Windows 10/11 and Ubuntu 22.04 LTS
-- **Comprehensive Testing**: 198 tests with 72% coverage
+- **Comprehensive Testing**: 227 tests with 72.53% coverage
 
 ## Requirements
 
