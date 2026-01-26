@@ -4,6 +4,12 @@ import requests
 from typing import Dict, List, Tuple
 
 
+# Known embedding model name patterns
+EMBEDDING_MODEL_PATTERNS = [
+    "embed", "nomic", "mxbai", "all-minilm", "bge", "gte"
+]
+
+
 def normalize_ollama_host(host: str) -> str:
     """Normalize Ollama host URL.
     
@@ -47,18 +53,13 @@ def fetch_ollama_models(host: str, timeout: int = 5) -> Tuple[List[str], List[st
         embedding_models = []
         generative_models = []
         
-        # Known embedding model patterns
-        embedding_patterns = [
-            "embed", "nomic", "mxbai", "all-minilm", "bge", "gte"
-        ]
-        
         for model in models:
             model_name = model.get("name", "")
             # Remove :latest tag for cleaner display
             display_name = model_name.replace(":latest", "")
             
-            # Check if it's an embedding model
-            is_embedding = any(pattern in model_name.lower() for pattern in embedding_patterns)
+            # Check if it's an embedding model using patterns
+            is_embedding = any(pattern in model_name.lower() for pattern in EMBEDDING_MODEL_PATTERNS)
             
             if is_embedding:
                 embedding_models.append(display_name)

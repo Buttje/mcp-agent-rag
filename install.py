@@ -17,6 +17,27 @@ except ImportError:
     requests = None
 
 
+# Known embedding model name patterns
+EMBEDDING_MODEL_PATTERNS = [
+    "embed", "nomic", "mxbai", "all-minilm", "bge", "gte"
+]
+
+
+def normalize_host(host: str) -> str:
+    """Normalize Ollama host URL.
+    
+    Args:
+        host: Ollama host URL
+        
+    Returns:
+        Normalized host URL
+    """
+    host = host.strip().rstrip("/")
+    if host.endswith("/api"):
+        host = host[:-4]
+    return host
+
+
 def check_ollama_connection(host: str, timeout: int = 5) -> Tuple[bool, str]:
     """Test connection to Ollama server.
     
@@ -31,12 +52,8 @@ def check_ollama_connection(host: str, timeout: int = 5) -> Tuple[bool, str]:
         return False, "requests library not available yet"
         
     try:
-        # Normalize host URL
-        host = host.strip().rstrip("/")
-        if host.endswith("/api"):
-            host = host[:-4]
-            
-        response = requests.get(f"{host}/api/tags", timeout=timeout)
+        normalized_host = normalize_host(host)
+        response = requests.get(f"{normalized_host}/api/tags", timeout=timeout)
         
         if response.status_code == 200:
             return True, ""
@@ -66,12 +83,8 @@ def fetch_ollama_models(host: str, timeout: int = 5) -> Tuple[List[str], List[st
         return [], [], "requests library not available yet"
         
     try:
-        # Normalize host URL
-        host = host.strip().rstrip("/")
-        if host.endswith("/api"):
-            host = host[:-4]
-            
-        response = requests.get(f"{host}/api/tags", timeout=timeout)
+        normalized_host = normalize_host(host)
+        response = requests.get(f"{normalized_host}/api/tags", timeout=timeout)
         
         if response.status_code != 200:
             return [], [], f"Failed to fetch models: HTTP {response.status_code}"
@@ -82,18 +95,13 @@ def fetch_ollama_models(host: str, timeout: int = 5) -> Tuple[List[str], List[st
         embedding_models = []
         generative_models = []
         
-        # Known embedding model patterns
-        embedding_patterns = [
-            "embed", "nomic", "mxbai", "all-minilm", "bge", "gte"
-        ]
-        
         for model in models:
             model_name = model.get("name", "")
             # Remove :latest tag for cleaner display
             display_name = model_name.replace(":latest", "")
             
-            # Check if it's an embedding model
-            is_embedding = any(pattern in model_name.lower() for pattern in embedding_patterns)
+            # Check if it's an embedding model using patterns
+            is_embedding = any(pattern in model_name.lower() for pattern in EMBEDDING_MODEL_PATTERNS)
             
             if is_embedding:
                 embedding_models.append(display_name)
