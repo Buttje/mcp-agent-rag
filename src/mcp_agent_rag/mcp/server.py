@@ -1,6 +1,7 @@
 """MCP Server implementation."""
 
 import json
+import logging
 import sys
 import threading
 import time
@@ -494,7 +495,6 @@ class MCPServer:
         python_level = level_map[level]
         
         # Update logger level
-        import logging
         logging.getLogger().setLevel(getattr(logging, python_level))
         logger.info(f"Log level set to: {level} (Python: {python_level})")
         
