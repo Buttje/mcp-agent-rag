@@ -1,0 +1,114 @@
+"""Tests for chat_cli module."""
+
+import json
+from unittest.mock import Mock, patch
+
+import pytest
+
+from mcp_agent_rag.chat_cli import MCPClient, create_mcp_tool_query_data, start_mcp_server
+
+
+def test_mcp_client_call_tool():
+    """Test MCP client tool calling."""
+    # Create a mock process
+    mock_process = Mock()
+    mock_process.stdin = Mock()
+    mock_process.stdout = Mock()
+    mock_process.poll.return_value = None
+
+    # Mock the response
+    response = {
+        "jsonrpc": "2.0",
+        "id": 1,
+        "result": {"context": "test context", "citations": []},
+    }
+    mock_process.stdout.readline.return_value = (
+        (json.dumps(response) + "\n").encode()
+    )
+
+    client = MCPClient(mock_process)
+
+    result = client.call_tool("query/get_data", {"prompt": "test"})
+
+    assert result["context"] == "test context"
+    assert result["citations"] == []
+
+
+def test_mcp_client_error_response():
+    """Test MCP client handles error responses."""
+    mock_process = Mock()
+    mock_process.stdin = Mock()
+    mock_process.stdout = Mock()
+    mock_process.poll.return_value = None
+
+    # Mock an error response
+    response = {
+        "jsonrpc": "2.0",
+        "id": 1,
+        "error": {"code": -32600, "message": "Invalid request"},
+    }
+    mock_process.stdout.readline.return_value = (
+        (json.dumps(response) + "\n").encode()
+    )
+
+    client = MCPClient(mock_process)
+
+    with pytest.raises(RuntimeError, match="MCP error: Invalid request"):
+        client.call_tool("query/get_data", {"prompt": "test"})
+
+
+def test_mcp_client_close():
+    """Test MCP client closes process properly."""
+    mock_process = Mock()
+    mock_process.poll.return_value = None
+
+    client = MCPClient(mock_process)
+    client.close()
+
+    mock_process.terminate.assert_called_once()
+    mock_process.wait.assert_called_once()
+
+
+def test_create_mcp_tool_query_data():
+    """Test creating MCP query tool."""
+    mock_client = Mock()
+    mock_client.call_tool.return_value = {
+        "context": "Test context",
+        "citations": [{"source": "test.txt", "chunk": 0}],
+    }
+
+    tool = create_mcp_tool_query_data(mock_client)
+    result = tool("test prompt")
+
+    assert "Test context" in result
+    assert "test.txt" in result
+    mock_client.call_tool.assert_called_once_with(
+        "query/get_data", {"prompt": "test prompt", "max_results": 5}
+    )
+
+
+def test_chat_cli_main_no_databases(test_config, capsys):
+    """Test chat CLI main with no databases."""
+    with patch("mcp_agent_rag.chat_cli.Config") as mock_config_class:
+        mock_config = Mock()
+        mock_config.get.side_effect = lambda key, default=None: {
+            "log_level": "INFO",
+        }.get(key, default)
+        mock_config_class.return_value = mock_config
+
+        with patch("mcp_agent_rag.chat_cli.Config.get_default_data_dir") as mock_dir:
+            mock_dir.return_value = test_config.config_path.parent
+
+            with patch("mcp_agent_rag.chat_cli.setup_logger"):
+                with patch("mcp_agent_rag.chat_cli.DatabaseManager") as mock_db_manager_class:
+                    mock_db_manager = Mock()
+                    mock_db_manager.list_databases.return_value = {}
+                    mock_db_manager_class.return_value = mock_db_manager
+
+                    with pytest.raises(SystemExit) as exc_info:
+                        from mcp_agent_rag.chat_cli import main
+                        main()
+
+                    assert exc_info.value.code == 1
+                    captured = capsys.readouterr()
+                    assert "No databases found" in captured.out
