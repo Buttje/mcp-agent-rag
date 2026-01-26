@@ -379,7 +379,7 @@ class MCPServer:
                 },
                 {
                     "name": "getDatabases",
-                    "description": "Get list of activated databases in the MCP RAG MCP server",
+                    "description": "Get list of activated databases in the MCP RAG server",
                     "inputSchema": {
                         "type": "object",
                         "properties": {},
@@ -646,8 +646,9 @@ class MCPServer:
                     
                     # Keep connection alive
                     try:
+                        keepalive_interval = 30  # seconds
                         while True:
-                            time.sleep(30)  # Send keepalive every 30 seconds
+                            time.sleep(keepalive_interval)
                             self.wfile.write(": keepalive\n\n".encode('utf-8'))
                             self.wfile.flush()
                     except Exception:
