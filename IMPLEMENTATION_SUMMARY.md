@@ -55,10 +55,10 @@ Successfully implemented a complete MCP-RAG system from scratch according to fun
    - JSON-RPC 2.0 compliance
    - stdio transport (HTTP planned)
    - 7 MCP tools implemented:
-     - `database/create`
-     - `database/add`
-     - `database/list`
-     - `query/get_data`
+     - `database-create`
+     - `database-add`
+     - `database-list`
+     - `query-get_data`
      - `resources/list`
      - `tools/list`
      - `tools/call`

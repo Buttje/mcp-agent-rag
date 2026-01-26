@@ -233,14 +233,14 @@ Returns information by scanning just the named database.
 
 The server also exposes these additional tools for database management:
 
-### database/create
+### database-create
 Create a new database with a unique name.
 
 **Parameters:**
 - `name` (string, required): Database name
 - `description` (string, optional): Database description
 
-### database/add
+### database-add
 Add documents to an existing database.
 
 **Parameters:**
@@ -251,10 +251,10 @@ Add documents to an existing database.
 - `recursive` (boolean, optional): Traverse subdirectories
 - `skip_existing` (boolean, optional): Skip already-indexed files
 
-### database/list
+### database-list
 List all databases with metadata.
 
-### query/get_data
+### query-get_data
 Retrieve context for a user's prompt using agentic RAG.
 
 **Parameters:**

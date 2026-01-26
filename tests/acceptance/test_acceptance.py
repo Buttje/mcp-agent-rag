@@ -237,7 +237,7 @@ class TestErrorHandling:
                 response = server.handle_request({
                     "jsonrpc": "2.0",
                     "id": 1,
-                    "method": "database/add",
+                    "method": "database-add",
                     "params": {"database_name": "nonexistent", "path": "/tmp"},
                 })
 

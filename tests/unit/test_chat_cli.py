@@ -28,7 +28,7 @@ def test_mcp_client_call_tool():
 
     client = MCPClient(mock_process)
 
-    result = client.call_tool("query/get_data", {"prompt": "test"})
+    result = client.call_tool("query-get_data", {"prompt": "test"})
 
     assert result["context"] == "test context"
     assert result["citations"] == []
@@ -54,7 +54,7 @@ def test_mcp_client_error_response():
     client = MCPClient(mock_process)
 
     with pytest.raises(RuntimeError, match="MCP error: Invalid request"):
-        client.call_tool("query/get_data", {"prompt": "test"})
+        client.call_tool("query-get_data", {"prompt": "test"})
 
 
 def test_mcp_client_close():
@@ -83,7 +83,7 @@ def test_create_mcp_tool_query_data():
     assert "Test context" in result
     assert "test.txt" in result
     mock_client.call_tool.assert_called_once_with(
-        "query/get_data", {"prompt": "test prompt", "max_results": 5}
+        "query-get_data", {"prompt": "test prompt", "max_results": 5}
     )
 
 
@@ -109,7 +109,7 @@ def test_mcp_client_no_truncation():
     )
 
     client = MCPClient(mock_process)
-    result = client.call_tool("query/get_data", {"prompt": "test"})
+    result = client.call_tool("query-get_data", {"prompt": "test"})
 
     # Verify the full text is returned without truncation
     assert result["context"] == long_text
@@ -136,7 +136,7 @@ def test_mcp_client_utf8_encoding():
     )
 
     client = MCPClient(mock_process)
-    result = client.call_tool("query/get_data", {"prompt": "test"})
+    result = client.call_tool("query-get_data", {"prompt": "test"})
 
     # Verify UTF-8 characters are preserved
     assert result["context"] == text_with_umlauts

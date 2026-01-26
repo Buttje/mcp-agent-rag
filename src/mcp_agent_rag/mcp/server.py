@@ -1,6 +1,7 @@
 """MCP Server implementation."""
 
 import json
+import logging
 import sys
 import threading
 import time
@@ -115,13 +116,13 @@ class MCPServer:
                 if notification_type == "initialized":
                     logger.info("Client initialized successfully")
                 return None  # Notifications don't get responses
-            elif method == "database/create":
+            elif method == "database-create":
                 result = self._create_database(params)
-            elif method == "database/add":
+            elif method == "database-add":
                 result = self._add_documents(params)
-            elif method == "database/list":
+            elif method == "database-list":
                 result = self._list_databases(params)
-            elif method == "query/get_data":
+            elif method == "query-get_data":
                 result = self._query_data(params)
             elif method == "getDatabases":
                 result = self._get_databases(params)
@@ -135,6 +136,8 @@ class MCPServer:
                 result = self._list_resource_templates(params)
             elif method == "prompts/list":
                 result = self._list_prompts(params)
+            elif method == "logging/setLevel":
+                result = self._set_log_level(params)
             elif method == "tools/list":
                 result = self._list_tools(params)
             elif method == "tools/call":
@@ -157,7 +160,7 @@ class MCPServer:
             )
 
     def _create_database(self, params: Dict) -> Dict:
-        """Handle database/create."""
+        """Handle database-create."""
         name = params.get("name")
         if not name:
             raise ValueError("Missing required parameter: name")
@@ -177,7 +180,7 @@ class MCPServer:
         }
 
     def _add_documents(self, params: Dict) -> Dict:
-        """Handle database/add."""
+        """Handle database-add."""
         database_name = params.get("database_name")
         if not database_name:
             raise ValueError("Missing required parameter: database_name")
@@ -209,7 +212,7 @@ class MCPServer:
         }
 
     def _list_databases(self, params: Dict) -> Dict:
-        """Handle database/list."""
+        """Handle database-list."""
         databases = self.db_manager.list_databases()
         result = []
 
@@ -225,7 +228,7 @@ class MCPServer:
         return {"databases": result}
 
     def _query_data(self, params: Dict) -> Dict:
-        """Handle query/get_data."""
+        """Handle query-get_data."""
         prompt = params.get("prompt")
         if not prompt:
             raise ValueError("Missing required parameter: prompt")
@@ -445,12 +448,66 @@ class MCPServer:
         # for common RAG operations
         return {"prompts": []}
 
+    def _set_log_level(self, params: Dict) -> Dict:
+        """Handle logging/setLevel.
+        
+        Allows clients to set the minimum severity level of log messages.
+        Uses syslog RFC 5424 severity levels.
+        
+        Args:
+            params: Dictionary containing 'level' parameter (one of: debug, info, 
+                    notice, warning, error, critical, alert, emergency)
+            
+        Returns:
+            Empty dictionary on success
+            
+        Raises:
+            ValueError: If level is invalid
+        """
+        level = params.get("level")
+        if not level:
+            raise ValueError("Missing required parameter: level")
+        
+        # Valid log levels per MCP spec (syslog RFC 5424)
+        valid_levels = {
+            "debug", "info", "notice", "warning", 
+            "error", "critical", "alert", "emergency"
+        }
+        
+        if level not in valid_levels:
+            raise ValueError(
+                f"Invalid log level: {level}. "
+                f"Must be one of: {', '.join(sorted(valid_levels))}"
+            )
+        
+        # Map MCP log levels to Python logging levels
+        level_map = {
+            "debug": "DEBUG",
+            "info": "INFO",
+            "notice": "INFO",  # Python doesn't have NOTICE, use INFO
+            "warning": "WARNING",
+            "error": "ERROR",
+            "critical": "CRITICAL",
+            "alert": "CRITICAL",  # Python doesn't have ALERT, use CRITICAL
+            "emergency": "CRITICAL",  # Python doesn't have EMERGENCY, use CRITICAL
+        }
+        
+        python_level = level_map[level]
+        
+        # Update logger level
+        logging.getLogger().setLevel(getattr(logging, python_level))
+        logger.info(f"Log level set to: {level} (Python: {python_level})")
+        
+        # Return empty result to indicate success
+        return {}
+
+
     def _list_tools(self, params: Dict) -> Dict:
         """Handle tools/list."""
         return {
             "tools": [
                 {
-                    "name": "database/create",
+                    "name": "database-create",
                     "description": "Create a new database with a unique name",
                     "inputSchema": {
                         "type": "object",
@@ -462,7 +519,7 @@ class MCPServer:
                     },
                 },
                 {
-                    "name": "database/add",
+                    "name": "database-add",
                     "description": "Add documents to an existing database",
                     "inputSchema": {
                         "type": "object",
@@ -478,12 +535,12 @@ class MCPServer:
                     },
                 },
                 {
-                    "name": "database/list",
+                    "name": "database-list",
                     "description": "List all databases",
                     "inputSchema": {"type": "object", "properties": {}},
                 },
                 {
-                    "name": "query/get_data",
+                    "name": "query-get_data",
                     "description": "Retrieve context for a user's prompt from active databases",
                     "inputSchema": {
                         "type": "object",
@@ -552,13 +609,13 @@ class MCPServer:
         name = params.get("name")
         arguments = params.get("arguments", {})
 
-        if name == "database/create":
+        if name == "database-create":
             return self._create_database(arguments)
-        elif name == "database/add":
+        elif name == "database-add":
             return self._add_documents(arguments)
-        elif name == "database/list":
+        elif name == "database-list":
             return self._list_databases(arguments)
-        elif name == "query/get_data":
+        elif name == "query-get_data":
             return self._query_data(arguments)
         elif name == "getDatabases":
             return self._get_databases(arguments)
