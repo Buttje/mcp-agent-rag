@@ -38,7 +38,7 @@ source .venv/bin/activate  # Linux/macOS
 .venv\Scripts\activate     # Windows
 
 # Verify installation
-mcp-rag --help
+python mcp-rag.py --help
 ```
 
 ### Install Ollama
@@ -56,44 +56,44 @@ ollama pull mistral:7b-instruct
 ### Create a Database
 
 ```bash
-mcp-rag database create --name mydb --description "My document collection"
+python mcp-rag.py database create --name mydb --description "My document collection"
 ```
 
 ### Add Documents
 
 Add from a directory:
 ```bash
-mcp-rag database add --database mydb --path ~/documents --recursive
+python mcp-rag.py database add --database mydb --path ~/documents --recursive
 ```
 
 Add from URL:
 ```bash
-mcp-rag database add --database mydb --url https://example.com/doc.pdf
+python mcp-rag.py database add --database mydb --url https://example.com/doc.pdf
 ```
 
 Add specific file types:
 ```bash
-mcp-rag database add --database mydb --path ~/code --glob "*.py" --recursive
+python mcp-rag.py database add --database mydb --path ~/code --glob "*.py" --recursive
 ```
 
 ### List Databases
 
 ```bash
-mcp-rag database list
+python mcp-rag.py database list
 ```
 
 ### Start MCP Server
 
 ```bash
-mcp-rag server start --active-databases mydb --transport stdio
+python mcp-rag.py server start --active-databases mydb --transport stdio
 ```
 
 ### Interactive Chat Client
 
-The **mcp-rag-cli** uses the AGNO agent framework and communicates with an MCP server:
+The **mcp-rag-cli.py** uses the AGNO agent framework and communicates with an MCP server:
 
 ```bash
-mcp-rag-cli
+python mcp-rag-cli.py
 ```
 
 The CLI client will:
@@ -107,7 +107,7 @@ The CLI client will:
 
 **Example Session:**
 ```
-$ mcp-rag-cli
+$ python mcp-rag-cli.py
 
 Available databases:
   1. mydb (42 documents)
@@ -201,6 +201,8 @@ See [TESTING.md](TESTING.md) for detailed testing documentation.
 ```
 mcp-agent-rag/
 ├── install.py              # Installation script
+├── mcp-rag.py              # Main CLI entry point
+├── mcp-rag-cli.py          # Interactive chat CLI entry point
 ├── pyproject.toml          # Project configuration
 ├── CHANGELOG.md            # Version history
 ├── TESTING.md              # Testing documentation

@@ -205,8 +205,8 @@ def main():
 
     if not databases:
         print("No databases found. Please create a database first using:")
-        print("  mcp-rag database create --name mydb --description 'My docs'")
-        print("  mcp-rag database add --database mydb --path /path/to/docs")
+        print("  python mcp-rag.py database create --name mydb --description 'My docs'")
+        print("  python mcp-rag.py database add --database mydb --path /path/to/docs")
         sys.exit(1)
 
     # Display database selection menu
