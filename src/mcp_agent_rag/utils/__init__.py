@@ -62,7 +62,7 @@ def setup_logger(
     app_logger = logging.getLogger("mcp_agent_rag")
     app_logger.setLevel(getattr(logging, level.upper()))
     app_logger.handlers.clear()
-    
+
     # Add same handlers to app logger
     app_logger.addHandler(console_handler)
     if log_file:
