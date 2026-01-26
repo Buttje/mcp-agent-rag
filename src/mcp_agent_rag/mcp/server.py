@@ -15,6 +15,9 @@ from mcp_agent_rag.utils import get_logger
 
 logger = get_logger(__name__)
 
+# MCP Protocol Constants
+MCP_PROTOCOL_VERSION = "2025-11-25"
+
 
 class MCPServer:
     """Model Context Protocol server."""
@@ -40,6 +43,54 @@ class MCPServer:
         # Initialize agentic RAG
         self.agent = AgenticRAG(config, self.loaded_databases)
 
+    def _initialize(self, params: Dict) -> Dict:
+        """Handle initialize request - required by MCP specification.
+        
+        The initialize method is the first interaction between client and server.
+        It negotiates protocol version and capabilities.
+        
+        Args:
+            params: Dictionary containing:
+                - protocolVersion: Client's supported protocol version
+                - capabilities: Client's capabilities (optional)
+                - clientInfo: Information about the client (optional)
+        
+        Returns:
+            Dictionary with server's protocol version, capabilities, and info
+        """
+        client_version = params.get("protocolVersion", MCP_PROTOCOL_VERSION)
+        client_capabilities = params.get("capabilities", {})
+        client_info = params.get("clientInfo", {})
+        
+        logger.info(f"Initialize request from client: {client_info.get('name', 'unknown')}")
+        logger.info(f"Client protocol version: {client_version}")
+        logger.info(f"Client capabilities: {client_capabilities}")
+        
+        # Server capabilities based on what we support
+        server_capabilities = {
+            "resources": {
+                "subscribe": False,  # We don't support resource subscriptions yet
+                "listChanged": False,
+            },
+            "tools": {
+                "listChanged": False,  # Tool list is static
+            },
+            "prompts": {
+                "listChanged": False,  # We don't support prompts yet
+            },
+            "logging": {},  # We support logging
+        }
+        
+        return {
+            "protocolVersion": MCP_PROTOCOL_VERSION,
+            "capabilities": server_capabilities,
+            "serverInfo": {
+                "name": "mcp-agent-rag",
+                "version": "1.0.0",
+            },
+            "instructions": f"MCP RAG Server with {len(self.active_databases)} active database(s): {', '.join(self.active_databases)}",
+        }
+
     def handle_request(self, request: Dict[str, Any]) -> Dict[str, Any]:
         """Handle JSON-RPC request.
 
@@ -47,14 +98,24 @@ class MCPServer:
             request: JSON-RPC request
 
         Returns:
-            JSON-RPC response
+            JSON-RPC response (or None for notifications)
         """
         try:
             method = request.get("method")
             params = request.get("params", {})
             request_id = request.get("id")
 
-            if method == "database/create":
+            # Handle initialize - required by MCP spec
+            if method == "initialize":
+                result = self._initialize(params)
+            # Handle notifications - no response needed
+            elif method and method.startswith("notifications/"):
+                notification_type = method.split("/", 1)[1]
+                logger.info(f"Received notification: {notification_type}")
+                if notification_type == "initialized":
+                    logger.info("Client initialized successfully")
+                return None  # Notifications don't get responses
+            elif method == "database/create":
                 result = self._create_database(params)
             elif method == "database/add":
                 result = self._add_documents(params)
@@ -474,7 +535,10 @@ class MCPServer:
                 try:
                     request = json.loads(line.strip())
                     response = self.handle_request(request)
-                    print(json.dumps(response), flush=True)
+                    
+                    # Only send response if it's not None (notifications don't get responses)
+                    if response is not None:
+                        print(json.dumps(response), flush=True)
                 except json.JSONDecodeError as e:
                     logger.error(f"Invalid JSON: {e}")
                     error_response = self._error_response(None, -32700, "Parse error")
@@ -514,12 +578,19 @@ class MCPServer:
                     # Handle request
                     response = server_instance.handle_request(request)
                     
-                    # Send response
-                    self.send_response(200)
-                    self.send_header('Content-Type', 'application/json')
-                    self.send_header('Access-Control-Allow-Origin', '*')
-                    self.end_headers()
-                    self.wfile.write(json.dumps(response).encode('utf-8'))
+                    # Only send response if not None (notifications don't get responses)
+                    if response is not None:
+                        # Send response
+                        self.send_response(200)
+                        self.send_header('Content-Type', 'application/json')
+                        self.send_header('Access-Control-Allow-Origin', '*')
+                        self.end_headers()
+                        self.wfile.write(json.dumps(response).encode('utf-8'))
+                    else:
+                        # For notifications, send 204 No Content
+                        self.send_response(204)
+                        self.send_header('Access-Control-Allow-Origin', '*')
+                        self.end_headers()
                     
                 except json.JSONDecodeError as e:
                     logger.error(f"Invalid JSON: {e}")
@@ -607,12 +678,19 @@ class MCPServer:
                     # Handle request
                     response = server_instance.handle_request(request)
                     
-                    # Send response as HTTP 200 with JSON
-                    self.send_response(200)
-                    self.send_header('Content-Type', 'application/json')
-                    self.send_header('Access-Control-Allow-Origin', '*')
-                    self.end_headers()
-                    self.wfile.write(json.dumps(response).encode('utf-8'))
+                    # Only send response if not None (notifications don't get responses)
+                    if response is not None:
+                        # Send response as HTTP 200 with JSON
+                        self.send_response(200)
+                        self.send_header('Content-Type', 'application/json')
+                        self.send_header('Access-Control-Allow-Origin', '*')
+                        self.end_headers()
+                        self.wfile.write(json.dumps(response).encode('utf-8'))
+                    else:
+                        # For notifications, send 204 No Content
+                        self.send_response(204)
+                        self.send_header('Access-Control-Allow-Origin', '*')
+                        self.end_headers()
                     
                 except Exception as e:
                     logger.error(f"Error handling request: {e}", exc_info=True)
