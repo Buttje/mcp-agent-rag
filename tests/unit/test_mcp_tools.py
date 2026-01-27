@@ -1,5 +1,6 @@
 """Tests for new MCP tools: getDatabases, getInformationFor, getInformationForDB."""
 
+import json
 from unittest.mock import Mock, patch
 
 import pytest
@@ -103,7 +104,6 @@ class TestGetDatabases:
         assert "isError" in response["result"]
         assert response["result"]["isError"] is False
         # Verify the actual data is in JSON format
-        import json
         data = json.loads(response["result"]["content"][0]["text"])
         assert "databases" in data
 
@@ -223,7 +223,6 @@ class TestGetInformationFor:
             assert "isError" in response["result"]
             assert response["result"]["isError"] is False
             # Verify the actual data is in JSON format
-            import json
             data = json.loads(response["result"]["content"][0]["text"])
             assert "context" in data
 
@@ -445,7 +444,6 @@ class TestGetInformationForDB:
             assert "isError" in response["result"]
             assert response["result"]["isError"] is False
             # Verify the actual data is in JSON format
-            import json
             data = json.loads(response["result"]["content"][0]["text"])
             assert "context" in data
 

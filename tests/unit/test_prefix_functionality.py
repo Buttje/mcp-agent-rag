@@ -1,5 +1,6 @@
 """Tests for prefix functionality in MCP tools."""
 
+import json
 from unittest.mock import patch
 
 import pytest
@@ -200,7 +201,6 @@ class TestPrefixInServer:
             # Should succeed
             assert "result" in response
             # Check MCP-compliant format
-            import json
             assert "content" in response["result"]
             assert isinstance(response["result"]["content"], list)
             assert response["result"]["isError"] is False
@@ -231,7 +231,6 @@ class TestPrefixInServer:
                 # Should succeed
                 assert "result" in response
                 # Check MCP-compliant format
-                import json
                 assert "content" in response["result"]
                 assert isinstance(response["result"]["content"], list)
                 assert response["result"]["isError"] is False

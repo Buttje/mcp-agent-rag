@@ -1,5 +1,6 @@
 """Tests for MCP server."""
 
+import json
 from unittest.mock import Mock, patch
 
 import pytest
@@ -355,7 +356,6 @@ def test_get_databases_via_tools_call(server):
     assert response["id"] == 15
     assert "result" in response
     # Check MCP-compliant format
-    import json
     assert "content" in response["result"]
     assert isinstance(response["result"]["content"], list)
     assert response["result"]["isError"] is False
@@ -403,7 +403,6 @@ def test_get_information_for_via_tools_call(server):
         assert response["id"] == 17
         assert "result" in response
         # Check MCP-compliant format
-        import json
         assert "content" in response["result"]
         assert isinstance(response["result"]["content"], list)
         assert response["result"]["isError"] is False
@@ -455,7 +454,6 @@ def test_get_information_for_db_via_tools_call(server):
         assert response["id"] == 19
         assert "result" in response
         # Check MCP-compliant format
-        import json
         assert "content" in response["result"]
         assert isinstance(response["result"]["content"], list)
         assert response["result"]["isError"] is False
