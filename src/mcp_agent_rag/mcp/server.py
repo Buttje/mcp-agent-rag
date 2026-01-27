@@ -595,7 +595,14 @@ class MCPServer:
         return {"tools": tools}
 
     def _call_tool(self, params: Dict) -> Dict:
-        """Handle tools/call."""
+        """Handle tools/call.
+        
+        Returns MCP-compliant response with content array format:
+        {
+            "content": [{"type": "text", "text": "<json_string>"}],
+            "isError": false
+        }
+        """
         name = params.get("name")
         arguments = params.get("arguments", {})
         
@@ -604,14 +611,38 @@ class MCPServer:
         if self.tool_prefix and name.startswith(self.tool_prefix):
             base_name = name[len(self.tool_prefix):]
 
-        if base_name == "getDatabases":
-            return self._get_databases(arguments)
-        elif base_name == "getInformationFor":
-            return self._get_information_for(arguments)
-        elif base_name == "getInformationForDB":
-            return self._get_information_for_db(arguments)
-        else:
-            raise ValueError(f"Unknown tool: {name}")
+        try:
+            # Call the appropriate tool method
+            if base_name == "getDatabases":
+                result = self._get_databases(arguments)
+            elif base_name == "getInformationFor":
+                result = self._get_information_for(arguments)
+            elif base_name == "getInformationForDB":
+                result = self._get_information_for_db(arguments)
+            else:
+                raise ValueError(f"Unknown tool: {name}")
+            
+            # Wrap result in MCP-compliant format
+            return {
+                "content": [
+                    {
+                        "type": "text",
+                        "text": json.dumps(result, indent=2)
+                    }
+                ],
+                "isError": False
+            }
+        except Exception as e:
+            # Return error in MCP-compliant format
+            return {
+                "content": [
+                    {
+                        "type": "text",
+                        "text": f"Error: {str(e)}"
+                    }
+                ],
+                "isError": True
+            }
 
     def _error_response(self, request_id, code: int, message: str) -> Dict:
         """Create JSON-RPC error response."""

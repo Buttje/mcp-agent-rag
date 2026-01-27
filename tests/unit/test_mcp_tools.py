@@ -95,7 +95,17 @@ class TestGetDatabases:
         
         assert response["id"] == 2
         assert "result" in response
-        assert "databases" in response["result"]
+        # Check MCP-compliant format
+        assert "content" in response["result"]
+        assert isinstance(response["result"]["content"], list)
+        assert len(response["result"]["content"]) > 0
+        assert response["result"]["content"][0]["type"] == "text"
+        assert "isError" in response["result"]
+        assert response["result"]["isError"] is False
+        # Verify the actual data is in JSON format
+        import json
+        data = json.loads(response["result"]["content"][0]["text"])
+        assert "databases" in data
 
     def test_get_databases_in_tools_list(self, multi_db_server):
         """Test getDatabases appears in tools/list."""
@@ -205,6 +215,17 @@ class TestGetInformationFor:
             
             assert response["id"] == 4
             assert "result" in response
+            # Check MCP-compliant format
+            assert "content" in response["result"]
+            assert isinstance(response["result"]["content"], list)
+            assert len(response["result"]["content"]) > 0
+            assert response["result"]["content"][0]["type"] == "text"
+            assert "isError" in response["result"]
+            assert response["result"]["isError"] is False
+            # Verify the actual data is in JSON format
+            import json
+            data = json.loads(response["result"]["content"][0]["text"])
+            assert "context" in data
 
     def test_get_information_for_in_tools_list(self, multi_db_server):
         """Test getInformationFor appears in tools/list."""
@@ -416,6 +437,17 @@ class TestGetInformationForDB:
             
             assert response["id"] == 8
             assert "result" in response
+            # Check MCP-compliant format
+            assert "content" in response["result"]
+            assert isinstance(response["result"]["content"], list)
+            assert len(response["result"]["content"]) > 0
+            assert response["result"]["content"][0]["type"] == "text"
+            assert "isError" in response["result"]
+            assert response["result"]["isError"] is False
+            # Verify the actual data is in JSON format
+            import json
+            data = json.loads(response["result"]["content"][0]["text"])
+            assert "context" in data
 
     def test_get_information_for_db_in_tools_list(self, multi_db_server):
         """Test getInformationForDB appears in tools/list."""
