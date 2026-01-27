@@ -153,17 +153,10 @@ class MCPServer:
                 return None  # Notifications don't get responses
             # Check if method is a prefixed tool call (e.g., "Prefix_getInformationFor")
             # Route through _call_tool to ensure MCP-compliant response format
-            elif self.tool_prefix and method and method.startswith(self.tool_prefix):
-                # Strip prefix to get base tool name
-                base_name = method[len(self.tool_prefix):]
-                # Check if it's a valid tool
-                if base_name in ["getDatabases", "getInformationFor", "getInformationForDB"]:
-                    # Route through _call_tool for MCP-compliant response
-                    result = self._call_tool({"name": method, "arguments": params})
-                else:
-                    return self._error_response(
-                        request_id, -32601, f"Method not found: {method}"
-                    )
+            elif (self.tool_prefix and method and method.startswith(self.tool_prefix) and
+                  method[len(self.tool_prefix):] in ["getDatabases", "getInformationFor", "getInformationForDB"]):
+                # Route through _call_tool for MCP-compliant response
+                result = self._call_tool({"name": method, "arguments": params})
             elif method == "getDatabases":
                 result = self._get_databases(params)
             elif method == "getInformationFor":
