@@ -458,13 +458,13 @@ class TestToolsIntegration:
         tools = response["result"]["tools"]
         tool_names = [tool["name"] for tool in tools]
         
-        # Check all three new tools are present
+        # Check all three tools are present
         assert "getDatabases" in tool_names
         assert "getInformationFor" in tool_names
         assert "getInformationForDB" in tool_names
         
-        # Should have at least 7 tools total (4 original + 3 new)
-        assert len(tools) >= 7
+        # Should have exactly 3 tools (removed 4 deprecated tools)
+        assert len(tools) == 3
 
     def test_workflow_get_dbs_then_query(self, multi_db_server):
         """Test workflow: get databases, then query specific one."""
