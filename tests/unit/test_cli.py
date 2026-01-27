@@ -121,3 +121,112 @@ def test_handle_database_add_no_path_or_url(test_config, mock_db_manager):
     with pytest.raises(SystemExit):
         with patch("mcp_agent_rag.cli.DatabaseManager", return_value=mock_db_manager):
             handle_database_command(args, test_config, Mock())
+
+
+def test_handle_server_start_with_cody_flag(test_config):
+    """Test handling server start command with --cody flag."""
+    # Create test database
+    test_config.add_database("testdb", "/tmp/testdb")
+    test_config.save()
+
+    args = Mock()
+    args.server_command = "start"
+    args.active_databases = "testdb"
+    args.transport = "stdio"
+    args.cody = True
+
+    mock_server = Mock()
+
+    with patch("mcp_agent_rag.cli.MCPServer") as MockMCPServer:
+        MockMCPServer.return_value = mock_server
+        handle_server_command(args, test_config, Mock())
+        
+        # Verify MCPServer was called with 2024-11-05 protocol version
+        MockMCPServer.assert_called_once()
+        call_args = MockMCPServer.call_args
+        assert call_args[1]["protocol_version"] == "2024-11-05"
+
+    mock_server.run_stdio.assert_called_once()
+
+
+def test_handle_server_start_without_cody_flag(test_config):
+    """Test handling server start command without --cody flag (default version)."""
+    # Create test database
+    test_config.add_database("testdb", "/tmp/testdb")
+    test_config.save()
+
+    args = Mock()
+    args.server_command = "start"
+    args.active_databases = "testdb"
+    args.transport = "stdio"
+    args.cody = False
+
+    mock_server = Mock()
+
+    with patch("mcp_agent_rag.cli.MCPServer") as MockMCPServer:
+        MockMCPServer.return_value = mock_server
+        handle_server_command(args, test_config, Mock())
+        
+        # Verify MCPServer was called with 2025-11-25 protocol version
+        MockMCPServer.assert_called_once()
+        call_args = MockMCPServer.call_args
+        assert call_args[1]["protocol_version"] == "2025-11-25"
+
+    mock_server.run_stdio.assert_called_once()
+
+
+def test_handle_server_start_http_with_cody_flag(test_config):
+    """Test handling server start command with HTTP transport and --cody flag."""
+    # Create test database
+    test_config.add_database("testdb", "/tmp/testdb")
+    test_config.save()
+
+    args = Mock()
+    args.server_command = "start"
+    args.active_databases = "testdb"
+    args.transport = "http"
+    args.host = "127.0.0.1"
+    args.port = 8080
+    args.cody = True
+
+    mock_server = Mock()
+
+    with patch("mcp_agent_rag.cli.MCPServer") as MockMCPServer:
+        MockMCPServer.return_value = mock_server
+        handle_server_command(args, test_config, Mock())
+        
+        # Verify MCPServer was called with 2024-11-05 protocol version
+        MockMCPServer.assert_called_once()
+        call_args = MockMCPServer.call_args
+        assert call_args[1]["protocol_version"] == "2024-11-05"
+
+    mock_server.run_http.assert_called_once_with(host="127.0.0.1", port=8080)
+
+
+def test_handle_server_start_sse_with_cody_flag(test_config):
+    """Test handling server start command with SSE transport and --cody flag."""
+    # Create test database
+    test_config.add_database("testdb", "/tmp/testdb")
+    test_config.save()
+
+    args = Mock()
+    args.server_command = "start"
+    args.active_databases = "testdb"
+    args.transport = "sse"
+    args.host = "0.0.0.0"
+    args.port = 9000
+    args.cody = True
+
+    mock_server = Mock()
+
+    with patch("mcp_agent_rag.cli.MCPServer") as MockMCPServer:
+        MockMCPServer.return_value = mock_server
+        handle_server_command(args, test_config, Mock())
+        
+        # Verify MCPServer was called with 2024-11-05 protocol version
+        MockMCPServer.assert_called_once()
+        call_args = MockMCPServer.call_args
+        assert call_args[1]["protocol_version"] == "2024-11-05"
+
+    mock_server.run_sse.assert_called_once_with(host="0.0.0.0", port=9000)
+
