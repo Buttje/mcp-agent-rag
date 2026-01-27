@@ -11,14 +11,17 @@ from mcp_agent_rag.mcp.server import (
 )
 from mcp_agent_rag.rag.vector_db import VectorDatabase
 
+# Constant for embedding dimension used in tests
+EMBEDDING_DIMENSION = 768
+
 
 @pytest.fixture
 def server_2025(test_config, temp_dir):
     """Create MCP server with 2025 protocol version."""
     # Create database
     db_path = temp_dir / "testdb"
-    db = VectorDatabase(db_path, dimension=768)
-    db.add([[0.1] * 768], [{"text": "test", "source": "test.txt"}])
+    db = VectorDatabase(db_path, dimension=EMBEDDING_DIMENSION)
+    db.add([[0.1] * EMBEDDING_DIMENSION], [{"text": "test", "source": "test.txt"}])
     db.save()
 
     test_config.add_database("testdb", str(db_path))
@@ -34,8 +37,8 @@ def server_2024(test_config, temp_dir):
     """Create MCP server with 2024 protocol version."""
     # Create database
     db_path = temp_dir / "testdb"
-    db = VectorDatabase(db_path, dimension=768)
-    db.add([[0.1] * 768], [{"text": "test", "source": "test.txt"}])
+    db = VectorDatabase(db_path, dimension=EMBEDDING_DIMENSION)
+    db.add([[0.1] * EMBEDDING_DIMENSION], [{"text": "test", "source": "test.txt"}])
     db.save()
 
     test_config.add_database("testdb", str(db_path))
@@ -52,8 +55,8 @@ class TestProtocolVersionInitialization:
     def test_default_protocol_version(self, test_config, temp_dir):
         """Test that default protocol version is 2025-11-25."""
         db_path = temp_dir / "testdb"
-        db = VectorDatabase(db_path, dimension=768)
-        db.add([[0.1] * 768], [{"text": "test", "source": "test.txt"}])
+        db = VectorDatabase(db_path, dimension=EMBEDDING_DIMENSION)
+        db.add([[0.1] * EMBEDDING_DIMENSION], [{"text": "test", "source": "test.txt"}])
         db.save()
 
         test_config.add_database("testdb", str(db_path))
@@ -76,8 +79,8 @@ class TestProtocolVersionInitialization:
     def test_invalid_protocol_version(self, test_config, temp_dir):
         """Test that invalid protocol version raises ValueError."""
         db_path = temp_dir / "testdb"
-        db = VectorDatabase(db_path, dimension=768)
-        db.add([[0.1] * 768], [{"text": "test", "source": "test.txt"}])
+        db = VectorDatabase(db_path, dimension=EMBEDDING_DIMENSION)
+        db.add([[0.1] * EMBEDDING_DIMENSION], [{"text": "test", "source": "test.txt"}])
         db.save()
 
         test_config.add_database("testdb", str(db_path))
@@ -248,7 +251,7 @@ class TestProtocolVersionFunctionality:
     def test_query_operations_with_2024_version(self, server_2024):
         """Test query operations work with 2024 protocol version."""
         with patch.object(server_2024.agent.embedder, "embed_single") as mock_embed:
-            mock_embed.return_value = [0.1] * 768
+            mock_embed.return_value = [0.1] * EMBEDDING_DIMENSION
 
             request = {
                 "jsonrpc": "2.0",
@@ -277,8 +280,8 @@ class TestProtocolVersionConstants:
     def test_both_versions_supported(self, test_config, temp_dir):
         """Test that both versions can be instantiated."""
         db_path = temp_dir / "testdb"
-        db = VectorDatabase(db_path, dimension=768)
-        db.add([[0.1] * 768], [{"text": "test", "source": "test.txt"}])
+        db = VectorDatabase(db_path, dimension=EMBEDDING_DIMENSION)
+        db.add([[0.1] * EMBEDDING_DIMENSION], [{"text": "test", "source": "test.txt"}])
         db.save()
 
         test_config.add_database("testdb", str(db_path))
