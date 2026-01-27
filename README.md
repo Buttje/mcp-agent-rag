@@ -59,8 +59,14 @@ ollama pull mistral:7b-instruct
 
 ### Create a Database
 
+Create a basic database:
 ```bash
 python mcp-rag.py database create --name mydb --description "My document collection"
+```
+
+Create a database with a prefix (for multi-server scenarios):
+```bash
+python mcp-rag.py database create --name mydb --description "My document collection" --prefix "MY"
 ```
 
 ### Add Documents
@@ -173,7 +179,7 @@ All transports use JSON-RPC 2.0 for message formatting.
 
 ### MCP Tools
 
-The server implements these MCP-compliant tools as specified in the requirements:
+The server implements these three MCP-compliant tools as specified in the requirements:
 
 #### getDatabases()
 Returns the list of activated databases in the MCP RAG server.
@@ -235,37 +241,90 @@ Returns information by scanning just the named database.
 }
 ```
 
-### Legacy Tools (also available)
+### Tool Name Prefixes for Multiple Server Instances
 
-The server also exposes these additional tools for database management:
+When running multiple instances of this MCP server, each with different databases, you can use **tool name prefixes** to help agents distinguish between server instances. This is particularly useful when an agent needs to interact with multiple MCP-RAG servers simultaneously.
 
-### database-create
-Create a new database with a unique name.
+#### Creating Databases with Prefixes
 
-**Parameters:**
-- `name` (string, required): Database name
-- `description` (string, optional): Database description
+When creating a database, specify a prefix that will be prepended to tool names:
 
-### database-add
-Add documents to an existing database.
+```bash
+python mcp-rag.py database create --name python_docs --description "Python documentation" --prefix "PY"
+python mcp-rag.py database create --name java_docs --description "Java documentation" --prefix "JAVA"
+python mcp-rag.py database create --name cpp_docs --description "C++ documentation" --prefix "CPP"
+```
 
-**Parameters:**
-- `database_name` (string, required): Target database name
-- `path` (string, optional): File or directory path
-- `url` (string, optional): URL to download
-- `glob` (string, optional): Glob pattern for file matching
-- `recursive` (boolean, optional): Traverse subdirectories
-- `skip_existing` (boolean, optional): Skip already-indexed files
+#### How Tool Prefixes Work
 
-### database-list
-List all databases with metadata.
+When you start the server with multiple databases, their prefixes are combined and prepended to all tool names:
 
-### query-get_data
-Retrieve context for a user's prompt using agentic RAG.
+```bash
+python mcp-rag.py server start --active-databases python_docs,java_docs --transport stdio
+```
 
-**Parameters:**
-- `prompt` (string, required): The query
-- `max_results` (integer, optional, default: 5): Maximum results per database
+This creates tools with the combined prefix `PY_JAVA_`:
+- `PY_JAVA_getDatabases`
+- `PY_JAVA_getInformationFor`
+- `PY_JAVA_getInformationForDB`
+
+#### Example Use Case
+
+Imagine you're building an AI coding assistant that needs access to documentation for multiple programming languages:
+
+1. **Server 1** (Python documentation):
+   ```bash
+   python mcp-rag.py server start --active-databases python_docs --transport stdio
+   ```
+   Tools: `PY_getDatabases`, `PY_getInformationFor`, `PY_getInformationForDB`
+
+2. **Server 2** (Java documentation):
+   ```bash
+   python mcp-rag.py server start --active-databases java_docs --transport stdio
+   ```
+   Tools: `JAVA_getDatabases`, `JAVA_getInformationFor`, `JAVA_getInformationForDB`
+
+3. **Server 3** (C++ documentation):
+   ```bash
+   python mcp-rag.py server start --active-databases cpp_docs --transport stdio
+   ```
+   Tools: `CPP_getDatabases`, `CPP_getInformationFor`, `CPP_getInformationForDB`
+
+The agent can now clearly understand which server instance to query based on the tool prefix:
+- Use `PY_getInformationFor("how to use list comprehension")` for Python questions
+- Use `JAVA_getInformationFor("how to use streams")` for Java questions
+- Use `CPP_getInformationFor("how to use smart pointers")` for C++ questions
+
+#### Alternative Mechanisms
+
+Besides tool name prefixes, you can also distinguish between server instances using:
+
+1. **Different Transport Ports** (HTTP/SSE): Run each server on a different port
+   ```bash
+   python mcp-rag.py server start --active-databases python_docs --transport http --port 8080
+   python mcp-rag.py server start --active-databases java_docs --transport http --port 8081
+   ```
+
+2. **Server Metadata**: The `getDatabases` tool returns database names and descriptions, allowing agents to discover what content each server provides
+
+3. **Naming Conventions**: Use descriptive database names that indicate their purpose (e.g., `python_stdlib`, `python_django`, `java_spring`)
+
+### Database Management via CLI
+
+Note: Database management (create, add, list) is performed using the CLI commands:
+
+```bash
+# Create a database
+python mcp-rag.py database create --name mydb --description "Description" --prefix "PRE"
+
+# Add documents to a database
+python mcp-rag.py database add --database mydb --path ~/documents --recursive
+
+# List all databases
+python mcp-rag.py database list
+```
+
+These operations are NOT exposed as MCP tools to keep the server interface focused on data retrieval.
 
 ## Usage Examples
 

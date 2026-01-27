@@ -140,12 +140,13 @@ def handle_database_command(args, config: Config, logger):
             print(f"\n{'Name':<20} {'Prefix':<10} {'Docs':<10} {'Description':<30} {'Last Updated':<25}")
             print("-" * 95)
             for name, info in databases.items():
+                last_updated = info.get('last_updated') or 'Never'
                 print(
                     f"{name:<20} "
                     f"{info.get('prefix', ''):<10} "
                     f"{info.get('doc_count', 0):<10} "
                     f"{info.get('description', ''):<30} "
-                    f"{info.get('last_updated', 'Never'):<25}"
+                    f"{last_updated:<25}"
                 )
 
     else:
