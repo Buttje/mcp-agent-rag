@@ -31,6 +31,7 @@ def main():
     create_parser = db_subparsers.add_parser("create", help="Create a new database")
     create_parser.add_argument("--name", required=True, help="Database name")
     create_parser.add_argument("--description", default="", help="Database description")
+    create_parser.add_argument("--prefix", default="", help="Prefix for MCP tool names (e.g., 'A1')")
 
     # database add
     add_parser = db_subparsers.add_parser("add", help="Add documents to database")
@@ -103,10 +104,11 @@ def handle_database_command(args, config: Config, logger):
     db_manager = DatabaseManager(config)
 
     if args.db_command == "create":
-        success = db_manager.create_database(args.name, args.description)
+        success = db_manager.create_database(args.name, args.description, args.prefix)
         if success:
             db_path = config.get_database_path(args.name)
-            print(f"Created database '{args.name}' at {db_path}")
+            prefix_msg = f" with prefix '{args.prefix}'" if args.prefix else ""
+            print(f"Created database '{args.name}'{prefix_msg} at {db_path}")
         else:
             print(f"Error: Database '{args.name}' already exists", file=sys.stderr)
             sys.exit(1)
@@ -135,14 +137,23 @@ def handle_database_command(args, config: Config, logger):
         if not databases:
             print("No databases found")
         else:
-            print(f"\n{'Name':<20} {'Docs':<10} {'Description':<40} {'Last Updated':<25}")
-            print("-" * 95)
+            name_width = 20
+            prefix_width = 10
+            docs_width = 10
+            desc_width = 30
+            updated_width = 25
+            separator_length = name_width + prefix_width + docs_width + desc_width + updated_width
+            
+            print(f"\n{'Name':<{name_width}} {'Prefix':<{prefix_width}} {'Docs':<{docs_width}} {'Description':<{desc_width}} {'Last Updated':<{updated_width}}")
+            print("-" * separator_length)
             for name, info in databases.items():
+                last_updated = info.get('last_updated') or 'Never'
                 print(
-                    f"{name:<20} "
-                    f"{info.get('doc_count', 0):<10} "
-                    f"{info.get('description', ''):<40} "
-                    f"{info.get('last_updated', 'Never'):<25}"
+                    f"{name:<{name_width}} "
+                    f"{info.get('prefix', ''):<{prefix_width}} "
+                    f"{info.get('doc_count', 0):<{docs_width}} "
+                    f"{info.get('description', ''):<{desc_width}} "
+                    f"{last_updated:<{updated_width}}"
                 )
 
     else:

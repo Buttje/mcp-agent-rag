@@ -66,7 +66,7 @@ class Config:
         self.data[key] = value
 
     def add_database(
-        self, name: str, path: str, description: str = "", doc_count: int = 0
+        self, name: str, path: str, description: str = "", doc_count: int = 0, prefix: str = ""
     ) -> None:
         """Add database to configuration.
 
@@ -75,6 +75,7 @@ class Config:
             path: Path to database files
             description: Database description
             doc_count: Number of documents
+            prefix: Prefix to prepend to tool names for this database
         """
         if "databases" not in self.data:
             self.data["databases"] = {}
@@ -84,6 +85,7 @@ class Config:
             "description": description,
             "doc_count": doc_count,
             "last_updated": None,
+            "prefix": prefix,
         }
 
     def update_database(self, name: str, **kwargs) -> None:

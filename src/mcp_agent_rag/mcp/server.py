@@ -58,6 +58,23 @@ class MCPServer:
             missing = set(active_databases) - set(self.loaded_databases.keys())
             raise ValueError(f"Failed to load databases: {', '.join(missing)}")
 
+        # Build combined prefix from all active database prefixes
+        # Note: Duplicates are removed while preserving order
+        prefixes = []
+        seen = set()
+        for db_name in active_databases:
+            db_config = config.get_database(db_name)
+            if db_config and db_config.get("prefix"):
+                prefix = db_config["prefix"]
+                if prefix not in seen:
+                    prefixes.append(prefix)
+                    seen.add(prefix)
+        
+        # Create combined prefix (e.g., "A1_B1_A2_" or "" if no prefixes)
+        self.tool_prefix = "_".join(prefixes) + "_" if prefixes else ""
+        
+        logger.info(f"Initialized server with tool prefix: '{self.tool_prefix}'")
+
         # Initialize agentic RAG
         self.agent = AgenticRAG(config, self.loaded_databases)
 
@@ -134,14 +151,6 @@ class MCPServer:
                 if notification_type == "initialized":
                     logger.info("Client initialized successfully")
                 return None  # Notifications don't get responses
-            elif method == "database-create":
-                result = self._create_database(params)
-            elif method == "database-add":
-                result = self._add_documents(params)
-            elif method == "database-list":
-                result = self._list_databases(params)
-            elif method == "query-get_data":
-                result = self._query_data(params)
             elif method == "getDatabases":
                 result = self._get_databases(params)
             elif method == "getInformationFor":
@@ -522,124 +531,84 @@ class MCPServer:
 
     def _list_tools(self, params: Dict) -> Dict:
         """Handle tools/list."""
-        return {
-            "tools": [
-                {
-                    "name": "database-create",
-                    "description": "Create a new database with a unique name",
-                    "inputSchema": {
-                        "type": "object",
-                        "properties": {
-                            "name": {"type": "string", "description": "Database name"},
-                            "description": {"type": "string", "description": "Database description"},
+        # Define base tools without prefix
+        base_tools = [
+            {
+                "name": "getDatabases",
+                "description": "Get list of activated databases in the MCP RAG server",
+                "inputSchema": {
+                    "type": "object",
+                    "properties": {},
+                },
+            },
+            {
+                "name": "getInformationFor",
+                "description": "Returns information by scanning through all activated databases",
+                "inputSchema": {
+                    "type": "object",
+                    "properties": {
+                        "prompt": {
+                            "type": "string", 
+                            "description": "The query/prompt to search for"
                         },
-                        "required": ["name"],
-                    },
-                },
-                {
-                    "name": "database-add",
-                    "description": "Add documents to an existing database",
-                    "inputSchema": {
-                        "type": "object",
-                        "properties": {
-                            "database_name": {"type": "string"},
-                            "path": {"type": "string"},
-                            "url": {"type": "string"},
-                            "glob": {"type": "string"},
-                            "recursive": {"type": "boolean"},
-                            "skip_existing": {"type": "boolean"},
+                        "max_results": {
+                            "type": "integer", 
+                            "default": 5,
+                            "description": "Maximum number of results per database"
                         },
-                        "required": ["database_name"],
                     },
+                    "required": ["prompt"],
                 },
-                {
-                    "name": "database-list",
-                    "description": "List all databases",
-                    "inputSchema": {"type": "object", "properties": {}},
-                },
-                {
-                    "name": "query-get_data",
-                    "description": "Retrieve context for a user's prompt from active databases",
-                    "inputSchema": {
-                        "type": "object",
-                        "properties": {
-                            "prompt": {"type": "string"},
-                            "max_results": {"type": "integer", "default": 5},
+            },
+            {
+                "name": "getInformationForDB",
+                "description": "Returns information by scanning just the named database",
+                "inputSchema": {
+                    "type": "object",
+                    "properties": {
+                        "prompt": {
+                            "type": "string",
+                            "description": "The query/prompt to search for"
                         },
-                        "required": ["prompt"],
-                    },
-                },
-                {
-                    "name": "getDatabases",
-                    "description": "Get list of activated databases in the MCP RAG server",
-                    "inputSchema": {
-                        "type": "object",
-                        "properties": {},
-                    },
-                },
-                {
-                    "name": "getInformationFor",
-                    "description": "Returns information by scanning through all activated databases",
-                    "inputSchema": {
-                        "type": "object",
-                        "properties": {
-                            "prompt": {
-                                "type": "string", 
-                                "description": "The query/prompt to search for"
-                            },
-                            "max_results": {
-                                "type": "integer", 
-                                "default": 5,
-                                "description": "Maximum number of results per database"
-                            },
+                        "database_name": {
+                            "type": "string",
+                            "description": "Name of the database to search in"
                         },
-                        "required": ["prompt"],
-                    },
-                },
-                {
-                    "name": "getInformationForDB",
-                    "description": "Returns information by scanning just the named database",
-                    "inputSchema": {
-                        "type": "object",
-                        "properties": {
-                            "prompt": {
-                                "type": "string",
-                                "description": "The query/prompt to search for"
-                            },
-                            "database_name": {
-                                "type": "string",
-                                "description": "Name of the database to search in"
-                            },
-                            "max_results": {
-                                "type": "integer",
-                                "default": 5,
-                                "description": "Maximum number of results"
-                            },
+                        "max_results": {
+                            "type": "integer",
+                            "default": 5,
+                            "description": "Maximum number of results"
                         },
-                        "required": ["prompt", "database_name"],
                     },
+                    "required": ["prompt", "database_name"],
                 },
-            ]
-        }
+            },
+        ]
+        
+        # Apply prefix to tool names if configured
+        tools = []
+        for tool in base_tools:
+            tool_copy = tool.copy()
+            tool_copy["name"] = f"{self.tool_prefix}{tool['name']}"
+            tools.append(tool_copy)
+        
+        return {"tools": tools}
 
     def _call_tool(self, params: Dict) -> Dict:
         """Handle tools/call."""
         name = params.get("name")
         arguments = params.get("arguments", {})
+        
+        # Strip prefix from tool name if present
+        base_name = name
+        if self.tool_prefix and name.startswith(self.tool_prefix):
+            base_name = name[len(self.tool_prefix):]
 
-        if name == "database-create":
-            return self._create_database(arguments)
-        elif name == "database-add":
-            return self._add_documents(arguments)
-        elif name == "database-list":
-            return self._list_databases(arguments)
-        elif name == "query-get_data":
-            return self._query_data(arguments)
-        elif name == "getDatabases":
+        if base_name == "getDatabases":
             return self._get_databases(arguments)
-        elif name == "getInformationFor":
+        elif base_name == "getInformationFor":
             return self._get_information_for(arguments)
-        elif name == "getInformationForDB":
+        elif base_name == "getInformationForDB":
             return self._get_information_for_db(arguments)
         else:
             raise ValueError(f"Unknown tool: {name}")
