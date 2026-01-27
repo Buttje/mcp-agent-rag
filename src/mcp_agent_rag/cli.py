@@ -63,6 +63,11 @@ def main():
     )
     start_parser.add_argument("--host", default="127.0.0.1", help="HTTP host")
     start_parser.add_argument("--port", type=int, default=8080, help="HTTP port")
+    start_parser.add_argument(
+        "--cody",
+        action="store_true",
+        help="Use MCP protocol version 2024-11-05 for CODY compatibility (default: 2025-11-25)",
+    )
 
     args = parser.parse_args()
 
@@ -159,7 +164,9 @@ def handle_server_command(args, config: Config, logger):
 
         # Create and start server
         try:
-            server = MCPServer(config, active_databases)
+            # Determine protocol version based on --cody flag
+            protocol_version = "2024-11-05" if args.cody else "2025-11-25"
+            server = MCPServer(config, active_databases, protocol_version=protocol_version)
 
             if args.transport == "stdio":
                 server.run_stdio()

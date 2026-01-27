@@ -17,23 +17,40 @@ from mcp_agent_rag.utils import get_logger
 logger = get_logger(__name__)
 
 # MCP Protocol Constants
-MCP_PROTOCOL_VERSION = "2025-11-25"
+MCP_PROTOCOL_VERSION_2025 = "2025-11-25"
+MCP_PROTOCOL_VERSION_2024 = "2024-11-05"
+# Default protocol version
+MCP_PROTOCOL_VERSION = MCP_PROTOCOL_VERSION_2025
 
 
 class MCPServer:
     """Model Context Protocol server."""
 
-    def __init__(self, config: Config, active_databases: List[str]):
+    def __init__(
+        self,
+        config: Config,
+        active_databases: List[str],
+        protocol_version: str = MCP_PROTOCOL_VERSION_2025,
+    ):
         """Initialize MCP server.
 
         Args:
             config: Configuration instance
             active_databases: List of active database names
+            protocol_version: MCP protocol version to use (2024-11-05 or 2025-11-25)
         """
         self.config = config
         self.active_databases = active_databases
         self.db_manager = DatabaseManager(config)
         self.agent = None
+        
+        # Set protocol version (validate it's one of the supported versions)
+        if protocol_version not in [MCP_PROTOCOL_VERSION_2024, MCP_PROTOCOL_VERSION_2025]:
+            raise ValueError(
+                f"Unsupported protocol version: {protocol_version}. "
+                f"Supported versions: {MCP_PROTOCOL_VERSION_2024}, {MCP_PROTOCOL_VERSION_2025}"
+            )
+        self.protocol_version = protocol_version
 
         # Load active databases
         self.loaded_databases = self.db_manager.load_multiple_databases(active_databases)
@@ -59,12 +76,13 @@ class MCPServer:
         Returns:
             Dictionary with server's protocol version, capabilities, and info
         """
-        client_version = params.get("protocolVersion", MCP_PROTOCOL_VERSION)
+        client_version = params.get("protocolVersion", self.protocol_version)
         client_capabilities = params.get("capabilities", {})
         client_info = params.get("clientInfo", {})
         
         logger.info(f"Initialize request from client: {client_info.get('name', 'unknown')}")
         logger.info(f"Client protocol version: {client_version}")
+        logger.info(f"Server protocol version: {self.protocol_version}")
         logger.info(f"Client capabilities: {client_capabilities}")
         
         # Server capabilities based on what we support
@@ -83,7 +101,7 @@ class MCPServer:
         }
         
         return {
-            "protocolVersion": MCP_PROTOCOL_VERSION,
+            "protocolVersion": self.protocol_version,
             "capabilities": server_capabilities,
             "serverInfo": {
                 "name": "mcp-agent-rag",
