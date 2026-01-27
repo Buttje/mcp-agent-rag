@@ -294,6 +294,90 @@ class TestPrefixInServer:
             # Should have A1_B1_ (not A1_B1_A1_)
             assert server.tool_prefix == "A1_B1_"
 
+    def test_call_prefixed_tool_as_direct_method(self, config_with_prefixes, temp_dir):
+        """Test calling a prefixed tool as a direct JSON-RPC method.
+        
+        This test verifies the fix for the bug where calling a tool with its
+        prefixed name (e.g., "LabControl_lcCoin_lcTribble_lcSmex_getInformationFor")
+        as a direct JSON-RPC method should return MCP-compliant format with
+        content array, not a raw dictionary.
+        """
+        with patch("mcp_agent_rag.mcp.agent.OllamaEmbedder"):
+            server = MCPServer(config_with_prefixes, ["db1", "db2"])
+            
+            with patch.object(server.agent.embedder, "embed_single") as mock_embed:
+                mock_embed.return_value = [0.15] * 768
+                
+                # Call prefixed getInformationFor as direct JSON-RPC method
+                request = {
+                    "jsonrpc": "2.0",
+                    "id": 1,
+                    "method": "A1_B1_getInformationFor",
+                    "params": {"prompt": "test query", "max_results": 5},
+                }
+                
+                response = server.handle_request(request)
+                
+                # Should succeed and return MCP-compliant format
+                assert "result" in response
+                assert response["id"] == 1
+                # Check MCP-compliant format with content array
+                assert "content" in response["result"]
+                assert isinstance(response["result"]["content"], list)
+                assert len(response["result"]["content"]) > 0
+                assert response["result"]["content"][0]["type"] == "text"
+                assert "isError" in response["result"]
+                assert response["result"]["isError"] is False
+                # Verify the actual data is in JSON format
+                data = json.loads(response["result"]["content"][0]["text"])
+                assert "context" in data
+                assert "prompt" in data
+                assert data["prompt"] == "test query"
+
+    def test_call_prefixed_getDatabases_as_direct_method(self, config_with_prefixes, temp_dir):
+        """Test calling prefixed getDatabases as direct JSON-RPC method."""
+        with patch("mcp_agent_rag.mcp.agent.OllamaEmbedder"):
+            server = MCPServer(config_with_prefixes, ["db1", "db2", "db3"])
+            
+            # Call prefixed getDatabases as direct method
+            request = {
+                "jsonrpc": "2.0",
+                "id": 1,
+                "method": "A1_B1_A2_getDatabases",
+                "params": {},
+            }
+            
+            response = server.handle_request(request)
+            
+            # Should succeed with MCP-compliant format
+            assert "result" in response
+            assert "content" in response["result"]
+            assert isinstance(response["result"]["content"], list)
+            assert response["result"]["isError"] is False
+            data = json.loads(response["result"]["content"][0]["text"])
+            assert "databases" in data
+            assert data["count"] == 3
+
+    def test_call_invalid_prefixed_method(self, config_with_prefixes, temp_dir):
+        """Test that calling an invalid prefixed method returns method not found."""
+        with patch("mcp_agent_rag.mcp.agent.OllamaEmbedder"):
+            server = MCPServer(config_with_prefixes, ["db1"])
+            
+            # Call invalid prefixed method
+            request = {
+                "jsonrpc": "2.0",
+                "id": 1,
+                "method": "A1_invalidMethod",
+                "params": {},
+            }
+            
+            response = server.handle_request(request)
+            
+            # Should return error
+            assert "error" in response
+            assert response["error"]["code"] == -32601
+            assert "Method not found" in response["error"]["message"]
+
 
 class TestDatabaseManagerWithPrefix:
     """Tests for DatabaseManager with prefix support."""
