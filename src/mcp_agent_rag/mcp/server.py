@@ -22,6 +22,9 @@ MCP_PROTOCOL_VERSION_2024 = "2024-11-05"
 # Default protocol version
 MCP_PROTOCOL_VERSION = MCP_PROTOCOL_VERSION_2025
 
+# MCP Tool names - single source of truth
+MCP_TOOL_NAMES = ["getDatabases", "getInformationFor", "getInformationForDB"]
+
 
 class MCPServer:
     """Model Context Protocol server."""
@@ -151,6 +154,12 @@ class MCPServer:
                 if notification_type == "initialized":
                     logger.info("Client initialized successfully")
                 return None  # Notifications don't get responses
+            # Check if method is a prefixed tool call (e.g., "Prefix_getInformationFor")
+            # Route through _call_tool to ensure MCP-compliant response format
+            elif (self.tool_prefix and method and method.startswith(self.tool_prefix) and
+                  method[len(self.tool_prefix):] in MCP_TOOL_NAMES):
+                # Route through _call_tool for MCP-compliant response
+                result = self._call_tool({"name": method, "arguments": params})
             elif method == "getDatabases":
                 result = self._get_databases(params)
             elif method == "getInformationFor":
