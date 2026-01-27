@@ -199,7 +199,13 @@ class TestPrefixInServer:
             
             # Should succeed
             assert "result" in response
-            assert "databases" in response["result"]
+            # Check MCP-compliant format
+            import json
+            assert "content" in response["result"]
+            assert isinstance(response["result"]["content"], list)
+            assert response["result"]["isError"] is False
+            data = json.loads(response["result"]["content"][0]["text"])
+            assert "databases" in data
 
     def test_call_prefixed_tool_with_arguments(self, config_with_prefixes, temp_dir):
         """Test calling a prefixed tool with arguments."""
@@ -224,7 +230,13 @@ class TestPrefixInServer:
                 
                 # Should succeed
                 assert "result" in response
-                assert "context" in response["result"]
+                # Check MCP-compliant format
+                import json
+                assert "content" in response["result"]
+                assert isinstance(response["result"]["content"], list)
+                assert response["result"]["isError"] is False
+                data = json.loads(response["result"]["content"][0]["text"])
+                assert "context" in data
 
     def test_mixed_prefix_databases(self, test_config, temp_dir):
         """Test server with mix of databases with and without prefixes."""
