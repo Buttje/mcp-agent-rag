@@ -9,13 +9,14 @@ A Python implementation of a Model Context Protocol (MCP) server that provides r
 - **Vector Database**: FAISS-based indexing with metadata persistence
 - **Agentic RAG**: Intelligent context retrieval with deduplication and citation tracking
 - **Interactive Chat Client**: Built-in CLI chat interface for natural conversations with your documents
-- **MCP Compliance**: Full JSON-RPC server implementing Model Context Protocol (2025-11-25)
+- **MCP Compliance**: Full JSON-RPC server implementing Model Context Protocol (2025-11-25 and 2024-11-05)
+- **CODY Compatibility**: Optional `--cody` flag for Sourcegraph CODY integration using MCP protocol version 2024-11-05
 - **Multiple Transport Protocols**: Support for stdio, HTTP, and SSE transports
 - **Required MCP Tools**: `getDatabases()`, `getInformationFor()`, `getInformationForDB()`
 - **Resource Templates**: Dynamic resource discovery via `resources/templates/list`
 - **CLI Interface**: Easy-to-use command-line tools for database and server management
 - **Cross-Platform**: Works on Windows 10/11 and Ubuntu 22.04 LTS
-- **Comprehensive Testing**: 227 tests with 72.53% coverage
+- **Comprehensive Testing**: 241+ tests with 73%+ coverage
 
 ## Requirements
 
@@ -87,7 +88,7 @@ python mcp-rag.py database list
 
 ### Start MCP Server
 
-The MCP server supports three transport protocols: stdio, HTTP, and SSE.
+The MCP server supports three transport protocols: stdio, HTTP, and SSE. By default, it uses MCP protocol version 2025-11-25.
 
 **stdio transport (for local/CLI usage):**
 ```bash
@@ -102,6 +103,11 @@ python mcp-rag.py server start --active-databases mydb --transport http --host 1
 **SSE transport (deprecated, for backwards compatibility):**
 ```bash
 python mcp-rag.py server start --active-databases mydb --transport sse --host 127.0.0.1 --port 8080
+```
+
+**CODY compatibility mode (uses MCP protocol version 2024-11-05):**
+```bash
+python mcp-rag.py server start --active-databases mydb --transport stdio --cody
 ```
 
 You can activate multiple databases by providing a comma-separated list:
