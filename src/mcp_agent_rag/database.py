@@ -39,12 +39,13 @@ class DatabaseManager:
         self.databases: Dict[str, VectorDatabase] = {}
         self._skip_current = False
 
-    def create_database(self, name: str, description: str = "") -> bool:
+    def create_database(self, name: str, description: str = "", prefix: str = "") -> bool:
         """Create a new database.
 
         Args:
             name: Database name
             description: Database description
+            prefix: Prefix to prepend to tool names for this database
 
         Returns:
             True if created successfully
@@ -62,6 +63,7 @@ class DatabaseManager:
             name=name,
             path=str(db_path),
             description=description,
+            prefix=prefix,
         )
         self.config.save()
 
