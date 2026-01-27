@@ -627,7 +627,7 @@ class MCPServer:
                 "content": [
                     {
                         "type": "text",
-                        "text": json.dumps(result, indent=2)
+                        "text": json.dumps(result)
                     }
                 ],
                 "isError": False
