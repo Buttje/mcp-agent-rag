@@ -1,5 +1,6 @@
 """Tests for MCP server."""
 
+import json
 from unittest.mock import Mock, patch
 
 import pytest
@@ -354,8 +355,13 @@ def test_get_databases_via_tools_call(server):
     response = server.handle_request(request)
     assert response["id"] == 15
     assert "result" in response
-    assert "databases" in response["result"]
-    assert response["result"]["count"] == 1
+    # Check MCP-compliant format
+    assert "content" in response["result"]
+    assert isinstance(response["result"]["content"], list)
+    assert response["result"]["isError"] is False
+    data = json.loads(response["result"]["content"][0]["text"])
+    assert "databases" in data
+    assert data["count"] == 1
 
 
 def test_handle_get_information_for(server):
@@ -396,7 +402,12 @@ def test_get_information_for_via_tools_call(server):
         response = server.handle_request(request)
         assert response["id"] == 17
         assert "result" in response
-        assert "context" in response["result"]
+        # Check MCP-compliant format
+        assert "content" in response["result"]
+        assert isinstance(response["result"]["content"], list)
+        assert response["result"]["isError"] is False
+        data = json.loads(response["result"]["content"][0]["text"])
+        assert "context" in data
 
 
 def test_handle_get_information_for_db(server):
@@ -442,8 +453,13 @@ def test_get_information_for_db_via_tools_call(server):
         response = server.handle_request(request)
         assert response["id"] == 19
         assert "result" in response
-        assert "context" in response["result"]
-        assert "database" in response["result"]
+        # Check MCP-compliant format
+        assert "content" in response["result"]
+        assert isinstance(response["result"]["content"], list)
+        assert response["result"]["isError"] is False
+        data = json.loads(response["result"]["content"][0]["text"])
+        assert "context" in data
+        assert "database" in data
 
 
 def test_get_information_for_db_invalid_database(server):
