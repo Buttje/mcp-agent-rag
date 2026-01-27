@@ -255,6 +255,34 @@ class TestPrefixInServer:
             # Only the database with prefix should contribute
             assert server.tool_prefix == "PRE_"
 
+    def test_duplicate_prefix_handling(self, test_config, temp_dir):
+        """Test that duplicate prefixes are deduplicated while preserving order."""
+        # Create three databases with some duplicate prefixes
+        db1_path = temp_dir / "db1"
+        db1 = VectorDatabase(db1_path, dimension=768)
+        db1.add([[0.1] * 768], [{"text": "Test", "source": "test.txt", "chunk_num": 0}])
+        db1.save()
+        test_config.add_database("db1", str(db1_path), prefix="A1")
+        
+        db2_path = temp_dir / "db2"
+        db2 = VectorDatabase(db2_path, dimension=768)
+        db2.add([[0.2] * 768], [{"text": "Test", "source": "test.txt", "chunk_num": 0}])
+        db2.save()
+        test_config.add_database("db2", str(db2_path), prefix="B1")
+        
+        db3_path = temp_dir / "db3"
+        db3 = VectorDatabase(db3_path, dimension=768)
+        db3.add([[0.3] * 768], [{"text": "Test", "source": "test.txt", "chunk_num": 0}])
+        db3.save()
+        test_config.add_database("db3", str(db3_path), prefix="A1")  # Duplicate A1
+        test_config.save()
+        
+        with patch("mcp_agent_rag.mcp.agent.OllamaEmbedder"):
+            server = MCPServer(test_config, ["db1", "db2", "db3"])
+            
+            # Should have A1_B1_ (not A1_B1_A1_)
+            assert server.tool_prefix == "A1_B1_"
+
 
 class TestDatabaseManagerWithPrefix:
     """Tests for DatabaseManager with prefix support."""

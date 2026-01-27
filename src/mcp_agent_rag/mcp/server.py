@@ -59,11 +59,16 @@ class MCPServer:
             raise ValueError(f"Failed to load databases: {', '.join(missing)}")
 
         # Build combined prefix from all active database prefixes
+        # Note: Duplicates are removed while preserving order
         prefixes = []
+        seen = set()
         for db_name in active_databases:
             db_config = config.get_database(db_name)
             if db_config and db_config.get("prefix"):
-                prefixes.append(db_config["prefix"])
+                prefix = db_config["prefix"]
+                if prefix not in seen:
+                    prefixes.append(prefix)
+                    seen.add(prefix)
         
         # Create combined prefix (e.g., "A1_B1_A2_" or "" if no prefixes)
         self.tool_prefix = "_".join(prefixes) + "_" if prefixes else ""

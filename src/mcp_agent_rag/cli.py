@@ -137,16 +137,23 @@ def handle_database_command(args, config: Config, logger):
         if not databases:
             print("No databases found")
         else:
-            print(f"\n{'Name':<20} {'Prefix':<10} {'Docs':<10} {'Description':<30} {'Last Updated':<25}")
-            print("-" * 95)
+            name_width = 20
+            prefix_width = 10
+            docs_width = 10
+            desc_width = 30
+            updated_width = 25
+            separator_length = name_width + prefix_width + docs_width + desc_width + updated_width
+            
+            print(f"\n{'Name':<{name_width}} {'Prefix':<{prefix_width}} {'Docs':<{docs_width}} {'Description':<{desc_width}} {'Last Updated':<{updated_width}}")
+            print("-" * separator_length)
             for name, info in databases.items():
                 last_updated = info.get('last_updated') or 'Never'
                 print(
-                    f"{name:<20} "
-                    f"{info.get('prefix', ''):<10} "
-                    f"{info.get('doc_count', 0):<10} "
-                    f"{info.get('description', ''):<30} "
-                    f"{last_updated:<25}"
+                    f"{name:<{name_width}} "
+                    f"{info.get('prefix', ''):<{prefix_width}} "
+                    f"{info.get('doc_count', 0):<{docs_width}} "
+                    f"{info.get('description', ''):<{desc_width}} "
+                    f"{last_updated:<{updated_width}}"
                 )
 
     else:
