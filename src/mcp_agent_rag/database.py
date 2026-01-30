@@ -252,7 +252,7 @@ class DatabaseManager:
         """
         import tempfile
 
-        response = requests.get(url, timeout=30)
+        response = requests.get(url, timeout=120)
         response.raise_for_status()
 
         # Create temporary file
