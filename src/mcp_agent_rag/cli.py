@@ -27,7 +27,6 @@ def main():
     db_subparsers = db_parser.add_subparsers(dest="db_command", help="Database commands")
 
     # database create
-    # database create
     create_parser = db_subparsers.add_parser("create", help="Create a new database")
     create_parser.add_argument("--name", required=True, help="Database name")
     create_parser.add_argument("--description", default="", help="Database description")

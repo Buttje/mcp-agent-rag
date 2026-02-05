@@ -7,6 +7,7 @@ A Python implementation of a Model Context Protocol (MCP) server that provides r
 - **Multi-Format Document Support**: Ingest .txt, .docx, .xlsx, .pptx, .odt, .ods, .odp, .pdf, HTML, and source code files
 - **Smart RAG Pipeline**: Automatic text extraction, cleaning, chunking with overlap, and embedding generation
 - **Vector Database**: FAISS-based indexing with metadata persistence
+- **Import/Export**: Export and import databases as ZIP files for easy sharing and backup
 - **Agentic RAG**: Intelligent context retrieval with deduplication and citation tracking
 - **Interactive Chat Client**: Built-in CLI chat interface for natural conversations with your documents
 - **MCP Compliance**: Full JSON-RPC server implementing Model Context Protocol (2025-11-25 and 2024-11-05)
@@ -91,6 +92,41 @@ python mcp-rag.py database add --database mydb --path ~/code --glob "*.py" --rec
 ```bash
 python mcp-rag.py database list
 ```
+
+### Export Databases
+
+Export one or more databases to a ZIP file for sharing or backup:
+
+```bash
+# Export a single database
+python mcp-rag.py database export --databases mydb --output backup.zip
+
+# Export multiple databases
+python mcp-rag.py database export --databases "db1,db2,db3" --output multi-backup.zip
+```
+
+The exported ZIP file contains:
+- A JSON manifest with all database metadata (name, description, doc_count, last_updated, prefix)
+- FAISS index files
+- Metadata pickle files
+
+### Import Databases
+
+Import databases from a previously exported ZIP file:
+
+```bash
+# Import databases (skips existing databases)
+python mcp-rag.py database import --file backup.zip
+
+# Import and overwrite existing databases
+python mcp-rag.py database import --file backup.zip --overwrite
+```
+
+The import command:
+- Validates the ZIP file format and manifest version
+- Preserves all metadata (description, doc_count, prefix, last_updated)
+- Gracefully handles partial failures when importing multiple databases
+- Can overwrite existing databases with the `--overwrite` flag
 
 ### Start MCP Server
 
