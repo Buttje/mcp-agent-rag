@@ -14,8 +14,10 @@ def test_is_supported():
     assert DocumentExtractor.is_supported(Path("test.py"))
     assert DocumentExtractor.is_supported(Path("test.pdf"))
     assert DocumentExtractor.is_supported(Path("test.docx"))
+    # Archives are now supported
+    assert DocumentExtractor.is_supported(Path("test.zip"))
+    assert DocumentExtractor.is_supported(Path("test.tar.gz"))
     assert not DocumentExtractor.is_supported(Path("test.exe"))
-    assert not DocumentExtractor.is_supported(Path("test.zip"))
 
 
 def test_extract_text_file(sample_text_file):
@@ -123,3 +125,120 @@ def test_extract_encrypted_pdf(temp_dir):
     # Without cryptography, it would fail with "cryptography>=3.1 is required for AES algorithm"
     # So if we get None here, it means the package handled the encrypted PDF properly
     assert text is None  # Expected: None because the file is encrypted and not decrypted
+
+
+def test_find_files_with_archive(temp_dir):
+    """Test finding and extracting files from archives."""
+    import zipfile
+    
+    # Create some sample files
+    file1 = temp_dir / "file1.txt"
+    file1.write_text("Content 1")
+    
+    file2 = temp_dir / "file2.py"
+    file2.write_text("def test(): pass")
+    
+    # Create a ZIP archive containing these files
+    zip_path = temp_dir / "archive.zip"
+    with zipfile.ZipFile(zip_path, 'w') as zipf:
+        zipf.write(file1, arcname="file1.txt")
+        zipf.write(file2, arcname="file2.py")
+    
+    # Remove the original files
+    file1.unlink()
+    file2.unlink()
+    
+    # Find files should extract the archive and return the files inside
+    files = find_files_to_process(str(temp_dir), recursive=False)
+    
+    # Should have extracted the files from the archive
+    assert len(files) >= 2
+    file_names = [f.name for f in files]
+    assert "file1.txt" in file_names
+    assert "file2.py" in file_names
+
+
+def test_find_files_with_nested_archive(temp_dir):
+    """Test finding files from nested archives."""
+    import zipfile
+    
+    # Create a text file
+    inner_file = temp_dir / "inner.txt"
+    inner_file.write_text("Inner content")
+    
+    # Create inner ZIP
+    inner_zip = temp_dir / "inner.zip"
+    with zipfile.ZipFile(inner_zip, 'w') as zipf:
+        zipf.write(inner_file, arcname="inner.txt")
+    
+    inner_file.unlink()
+    
+    # Create outer ZIP containing the inner ZIP
+    outer_zip = temp_dir / "outer.zip"
+    with zipfile.ZipFile(outer_zip, 'w') as zipf:
+        zipf.write(inner_zip, arcname="inner.zip")
+    
+    inner_zip.unlink()
+    
+    # Find files should extract both levels
+    files = find_files_to_process(str(temp_dir), recursive=False)
+    
+    # Should have the file from the nested archive
+    assert len(files) >= 1
+    file_names = [f.name for f in files]
+    assert "inner.txt" in file_names
+
+
+def test_find_files_mixed_archive_and_regular(temp_dir):
+    """Test finding both regular files and files from archives."""
+    import zipfile
+    
+    # Create a regular file
+    regular_file = temp_dir / "regular.txt"
+    regular_file.write_text("Regular content")
+    
+    # Create a file to archive
+    archived_file_source = temp_dir / "archived.txt"
+    archived_file_source.write_text("Archived content")
+    
+    # Create archive
+    zip_path = temp_dir / "archive.zip"
+    with zipfile.ZipFile(zip_path, 'w') as zipf:
+        zipf.write(archived_file_source, arcname="archived.txt")
+    
+    archived_file_source.unlink()
+    
+    # Find files should return both regular and extracted files
+    files = find_files_to_process(str(temp_dir), recursive=False)
+    
+    file_names = [f.name for f in files]
+    assert "regular.txt" in file_names
+    assert "archived.txt" in file_names
+
+
+def test_archive_with_unsupported_files(temp_dir):
+    """Test that archives containing unsupported files filter correctly."""
+    import zipfile
+    
+    # Create supported and unsupported files
+    supported = temp_dir / "supported.txt"
+    supported.write_text("Supported")
+    
+    unsupported = temp_dir / "unsupported.exe"
+    unsupported.write_bytes(b"\x00\x01\x02")
+    
+    # Create archive with both
+    zip_path = temp_dir / "mixed.zip"
+    with zipfile.ZipFile(zip_path, 'w') as zipf:
+        zipf.write(supported, arcname="supported.txt")
+        zipf.write(unsupported, arcname="unsupported.exe")
+    
+    supported.unlink()
+    unsupported.unlink()
+    
+    # Find files should only return supported files
+    files = find_files_to_process(str(temp_dir), recursive=False)
+    
+    file_names = [f.name for f in files]
+    assert "supported.txt" in file_names
+    assert "unsupported.exe" not in file_names
