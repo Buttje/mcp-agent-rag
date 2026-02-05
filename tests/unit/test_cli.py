@@ -1,10 +1,11 @@
 """Tests for CLI."""
 
-from unittest.mock import Mock, patch
+from unittest.mock import Mock, patch, call
+import sys
 
 import pytest
 
-from mcp_agent_rag.cli import handle_database_command, handle_server_command
+from mcp_agent_rag.cli import handle_database_command, handle_server_command, main
 
 
 @pytest.fixture
@@ -228,4 +229,52 @@ def test_handle_server_start_sse_with_cody_flag(test_config):
         assert call_args[1]["protocol_version"] == "2024-11-05"
 
     mock_server.run_sse.assert_called_once_with(host="0.0.0.0", port=9000)
+
+
+def test_main_with_custom_log_file(test_config, capsys):
+    """Test main CLI with custom log file argument."""
+    test_args = [
+        "mcp-rag",
+        "--log",
+        "/tmp/custom-log.log",
+        "database",
+        "list",
+    ]
+    
+    with patch.object(sys, "argv", test_args):
+        with patch("mcp_agent_rag.cli.setup_logger") as mock_setup_logger:
+            with patch("mcp_agent_rag.cli.DatabaseManager") as MockDBManager:
+                mock_db_manager = Mock()
+                mock_db_manager.list_databases.return_value = {}
+                MockDBManager.return_value = mock_db_manager
+                
+                main()
+                
+                # Verify setup_logger was called with the custom log file
+                mock_setup_logger.assert_called_once()
+                call_args = mock_setup_logger.call_args
+                assert call_args[1]["log_file"] == "/tmp/custom-log.log"
+
+
+def test_main_with_default_log_file(test_config, capsys):
+    """Test main CLI with default log file."""
+    test_args = [
+        "mcp-rag",
+        "database",
+        "list",
+    ]
+    
+    with patch.object(sys, "argv", test_args):
+        with patch("mcp_agent_rag.cli.setup_logger") as mock_setup_logger:
+            with patch("mcp_agent_rag.cli.DatabaseManager") as MockDBManager:
+                mock_db_manager = Mock()
+                mock_db_manager.list_databases.return_value = {}
+                MockDBManager.return_value = mock_db_manager
+                
+                main()
+                
+                # Verify setup_logger was called with the default log file
+                mock_setup_logger.assert_called_once()
+                call_args = mock_setup_logger.call_args
+                assert "mcp-rag.log" in call_args[1]["log_file"]
 

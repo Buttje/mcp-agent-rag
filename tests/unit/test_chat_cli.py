@@ -1,11 +1,12 @@
 """Tests for chat_cli module."""
 
 import json
+import sys
 from unittest.mock import Mock, patch
 
 import pytest
 
-from mcp_agent_rag.chat_cli import MCPClient, create_mcp_tool_query_data, start_mcp_server
+from mcp_agent_rag.chat_cli import MCPClient, create_mcp_tool_query_data, start_mcp_server, main
 
 
 def test_mcp_client_call_tool():
@@ -170,3 +171,43 @@ def test_chat_cli_main_no_databases(test_config, capsys):
                     assert exc_info.value.code == 1
                     captured = capsys.readouterr()
                     assert "No databases found" in captured.out
+
+
+def test_chat_cli_main_with_custom_log_file(test_config):
+    """Test chat CLI main with custom log file argument."""
+    test_args = ["mcp-rag-cli", "--log", "/tmp/custom-chat.log"]
+    
+    with patch.object(sys, "argv", test_args):
+        with patch("mcp_agent_rag.chat_cli.setup_logger") as mock_setup_logger:
+            with patch("mcp_agent_rag.chat_cli.DatabaseManager") as MockDBManager:
+                mock_db_manager = Mock()
+                mock_db_manager.list_databases.return_value = {}
+                MockDBManager.return_value = mock_db_manager
+                
+                with pytest.raises(SystemExit):
+                    main()
+                
+                # Verify setup_logger was called with the custom log file
+                mock_setup_logger.assert_called_once()
+                call_args = mock_setup_logger.call_args
+                assert call_args[1]["log_file"] == "/tmp/custom-chat.log"
+
+
+def test_chat_cli_main_with_default_log_file(test_config):
+    """Test chat CLI main with default log file."""
+    test_args = ["mcp-rag-cli"]
+    
+    with patch.object(sys, "argv", test_args):
+        with patch("mcp_agent_rag.chat_cli.setup_logger") as mock_setup_logger:
+            with patch("mcp_agent_rag.chat_cli.DatabaseManager") as MockDBManager:
+                mock_db_manager = Mock()
+                mock_db_manager.list_databases.return_value = {}
+                MockDBManager.return_value = mock_db_manager
+                
+                with pytest.raises(SystemExit):
+                    main()
+                
+                # Verify setup_logger was called with the default log file
+                mock_setup_logger.assert_called_once()
+                call_args = mock_setup_logger.call_args
+                assert "mcp-rag-cli.log" in call_args[1]["log_file"]

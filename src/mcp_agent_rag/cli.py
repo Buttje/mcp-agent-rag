@@ -19,6 +19,11 @@ def main():
         default=None,
         help=f"Path to config file (default: {Config.get_default_config_path()})",
     )
+    parser.add_argument(
+        "--log",
+        default=None,
+        help="Path to log file (default: ~/.mcp-agent-rag/logs/mcp-rag.log)",
+    )
 
     subparsers = parser.add_subparsers(dest="command", help="Commands")
 
@@ -93,10 +98,14 @@ def main():
     config = Config(args.config)
 
     # Setup logging
-    log_dir = Config.get_default_data_dir() / "logs"
-    log_file = log_dir / "mcp-rag.log"
+    if args.log:
+        log_file = args.log
+    else:
+        log_dir = Config.get_default_data_dir() / "logs"
+        log_file = str(log_dir / "mcp-rag.log")
+    
     setup_logger(
-        log_file=str(log_file),
+        log_file=log_file,
         level=config.get("log_level", "INFO"),
     )
     logger = get_logger("mcp-rag")
