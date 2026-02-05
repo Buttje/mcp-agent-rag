@@ -45,6 +45,16 @@ def main():
     # database list
     list_parser = db_subparsers.add_parser("list", help="List all databases")
 
+    # database export
+    export_parser = db_subparsers.add_parser("export", help="Export databases to a ZIP file")
+    export_parser.add_argument("--databases", required=True, help="Comma-separated list of database names to export")
+    export_parser.add_argument("--output", required=True, help="Output ZIP file path")
+
+    # database import
+    import_parser = db_subparsers.add_parser("import", help="Import databases from a ZIP file")
+    import_parser.add_argument("--file", required=True, help="ZIP file to import")
+    import_parser.add_argument("--overwrite", action="store_true", help="Overwrite existing databases")
+
     # Server commands
     server_parser = subparsers.add_parser("server", help="Server management")
     server_subparsers = server_parser.add_subparsers(dest="server_command", help="Server commands")
@@ -155,6 +165,41 @@ def handle_database_command(args, config: Config, logger):
                     f"{info.get('description', ''):<{desc_width}} "
                     f"{last_updated:<{updated_width}}"
                 )
+
+    elif args.db_command == "export":
+        # Parse database names
+        database_names = [db.strip() for db in args.databases.split(",")]
+        
+        # Perform export
+        success = db_manager.export_databases(database_names, args.output)
+        if success:
+            print(f"Successfully exported {len(database_names)} database(s) to {args.output}")
+        else:
+            print(f"Error: Failed to export databases", file=sys.stderr)
+            sys.exit(1)
+
+    elif args.db_command == "import":
+        # Perform import
+        results = db_manager.import_databases(args.file, args.overwrite)
+        
+        if not results:
+            print("Error: Failed to import databases", file=sys.stderr)
+            sys.exit(1)
+        
+        # Print results
+        successful = [name for name, success in results.items() if success]
+        failed = [name for name, success in results.items() if not success]
+        
+        print(f"\nImport Summary:")
+        print(f"  Successful: {len(successful)}")
+        if successful:
+            for name in successful:
+                print(f"    - {name}")
+        
+        if failed:
+            print(f"  Failed/Skipped: {len(failed)}")
+            for name in failed:
+                print(f"    - {name}")
 
     else:
         print("Error: Unknown database command", file=sys.stderr)
