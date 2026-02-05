@@ -260,13 +260,12 @@ class ArchiveExtractor:
                     # Resolve the member path and check it's within extract_to
                     member_path = (extract_to / member.name).resolve()
                     extract_to_resolved = extract_to.resolve()
-                    is_safe = (
-                        extract_to_resolved in member_path.parents
-                        or member_path == extract_to_resolved
-                    )
-                    if is_safe:
+                    # Check if member_path is within extract_to_resolved
+                    try:
+                        member_path.relative_to(extract_to_resolved)
                         safe_members.append(member)
-                    else:
+                    except ValueError:
+                        # Path is not relative to extract_to, potential traversal
                         logger.warning(
                             f"Skipping potentially unsafe path in TAR: {member.name}"
                         )

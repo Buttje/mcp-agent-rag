@@ -433,7 +433,12 @@ def test_extract_archive_with_explicit_extract_to(temp_archive_dir, sample_files
     # Verify extraction to custom directory
     assert len(extracted_files) == 1
     assert extract_dir.exists()
-    assert extracted_files[0].parent.is_relative_to(extract_dir)
+    # Check that extracted file is within the extract directory
+    try:
+        extracted_files[0].relative_to(extract_dir)
+        assert True  # File is within extract_dir
+    except ValueError:
+        assert False, f"File {extracted_files[0]} not within {extract_dir}"
 
 
 def test_extract_tgz_archive(temp_archive_dir, sample_files):
