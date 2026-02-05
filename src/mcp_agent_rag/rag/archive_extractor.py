@@ -7,7 +7,6 @@ import tarfile
 import tempfile
 import zipfile
 from pathlib import Path
-from typing import List, Optional, Set
 
 import py7zr
 import rarfile
@@ -21,7 +20,7 @@ class ArchiveExtractor:
     """Extract files from compressed archives."""
 
     ARCHIVE_EXTENSIONS = {
-        ".zip", ".7z", ".gz", ".tar", ".tar.gz", ".tgz", 
+        ".zip", ".7z", ".gz", ".tar", ".tar.gz", ".tgz",
         ".tar.bz2", ".tbz2", ".tar.xz", ".txz", ".rar"
     }
 
@@ -45,10 +44,10 @@ class ArchiveExtractor:
     @staticmethod
     def extract_archive(
         archive_path: Path,
-        extract_to: Optional[Path] = None,
+        extract_to: Path | None = None,
         max_depth: int = 10,
         current_depth: int = 0
-    ) -> List[Path]:
+    ) -> list[Path]:
         """Extract files from archive, handling nested archives recursively.
 
         Args:
@@ -94,7 +93,12 @@ class ArchiveExtractor:
                 extracted_files.extend(
                     ArchiveExtractor._extract_gzip(archive_path, extract_to)
                 )
-            elif any(archive_str.endswith(ext) for ext in ['.tar', '.tar.gz', '.tgz', '.tar.bz2', '.tbz2', '.tar.xz', '.txz']):
+            elif any(
+                archive_str.endswith(ext)
+                for ext in [
+                    '.tar', '.tar.gz', '.tgz', '.tar.bz2', '.tbz2', '.tar.xz', '.txz'
+                ]
+            ):
                 extracted_files.extend(
                     ArchiveExtractor._extract_tar(archive_path, extract_to)
                 )
@@ -136,7 +140,7 @@ class ArchiveExtractor:
         return extracted_files
 
     @staticmethod
-    def _extract_zip(archive_path: Path, extract_to: Path) -> List[Path]:
+    def _extract_zip(archive_path: Path, extract_to: Path) -> list[Path]:
         """Extract ZIP archive.
 
         Args:
@@ -160,7 +164,7 @@ class ArchiveExtractor:
         return extracted_files
 
     @staticmethod
-    def _extract_7z(archive_path: Path, extract_to: Path) -> List[Path]:
+    def _extract_7z(archive_path: Path, extract_to: Path) -> list[Path]:
         """Extract 7Z archive.
 
         Args:
@@ -184,7 +188,7 @@ class ArchiveExtractor:
         return extracted_files
 
     @staticmethod
-    def _extract_rar(archive_path: Path, extract_to: Path) -> List[Path]:
+    def _extract_rar(archive_path: Path, extract_to: Path) -> list[Path]:
         """Extract RAR archive.
 
         Args:
@@ -208,7 +212,7 @@ class ArchiveExtractor:
         return extracted_files
 
     @staticmethod
-    def _extract_gzip(archive_path: Path, extract_to: Path) -> List[Path]:
+    def _extract_gzip(archive_path: Path, extract_to: Path) -> list[Path]:
         """Extract GZIP archive.
 
         Args:
@@ -237,7 +241,7 @@ class ArchiveExtractor:
         return extracted_files
 
     @staticmethod
-    def _extract_tar(archive_path: Path, extract_to: Path) -> List[Path]:
+    def _extract_tar(archive_path: Path, extract_to: Path) -> list[Path]:
         """Extract TAR archive (including tar.gz, tar.bz2, tar.xz).
 
         Args:
@@ -255,7 +259,12 @@ class ArchiveExtractor:
                 for member in tar_ref.getmembers():
                     # Resolve the member path and check it's within extract_to
                     member_path = (extract_to / member.name).resolve()
-                    if extract_to.resolve() in member_path.parents or member_path == extract_to.resolve():
+                    extract_to_resolved = extract_to.resolve()
+                    is_safe = (
+                        extract_to_resolved in member_path.parents
+                        or member_path == extract_to_resolved
+                    )
+                    if is_safe:
                         safe_members.append(member)
                     else:
                         logger.warning(

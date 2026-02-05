@@ -2,14 +2,13 @@
 
 import os
 from pathlib import Path
-from typing import List, Optional, Tuple
 
 import chardet
 import pypdf
 from bs4 import BeautifulSoup
 from docx import Document as DocxDocument
-from odf import text as odf_text
 from odf import teletype
+from odf import text as odf_text
 from odf.opendocument import load as odf_load
 from openpyxl import load_workbook
 from pptx import Presentation
@@ -27,7 +26,7 @@ class DocumentExtractor:
         ".txt", ".md", ".py", ".c", ".cpp", ".h", ".hpp", ".cs", ".go", ".rs",
         ".java", ".js", ".ts", ".sh", ".bat", ".ps1", ".s", ".asm",
         ".docx", ".xlsx", ".pptx", ".odt", ".ods", ".odp", ".pdf", ".html", ".htm",
-        ".zip", ".7z", ".gz", ".tar", ".tar.gz", ".tgz", ".tar.bz2", ".tbz2", 
+        ".zip", ".7z", ".gz", ".tar", ".tar.gz", ".tgz", ".tar.bz2", ".tbz2",
         ".tar.xz", ".txz", ".rar"
     }
 
@@ -49,7 +48,7 @@ class DocumentExtractor:
         return False
 
     @staticmethod
-    def extract_text(file_path: Path) -> Optional[str]:
+    def extract_text(file_path: Path) -> str | None:
         """Extract text from file.
 
         Args:
@@ -96,7 +95,7 @@ class DocumentExtractor:
                 raw_data = f.read()
                 result = chardet.detect(raw_data)
                 encoding = result["encoding"] or "utf-8"
-            with open(file_path, "r", encoding=encoding, errors="replace") as f:
+            with open(file_path, encoding=encoding, errors="replace") as f:
                 return f.read()
         except Exception as e:
             logger.error(f"Error reading text file {file_path}: {e}")
@@ -146,7 +145,7 @@ class DocumentExtractor:
         """Extract text from ODS file."""
         doc = odf_load(str(file_path))
         text_parts = []
-        from odf.table import Table, TableRow, TableCell
+        from odf.table import Table, TableCell, TableRow
         tables = doc.getElementsByType(Table)
         for table in tables:
             text_parts.append(f"Table: {table.getAttribute('name') or 'Unnamed'}")
@@ -189,7 +188,7 @@ class DocumentExtractor:
     @staticmethod
     def _extract_html(file_path: Path) -> str:
         """Extract text from HTML file."""
-        with open(file_path, "r", encoding="utf-8", errors="replace") as f:
+        with open(file_path, encoding="utf-8", errors="replace") as f:
             soup = BeautifulSoup(f.read(), "html.parser")
             # Remove script and style elements
             for script in soup(["script", "style"]):
@@ -200,9 +199,9 @@ class DocumentExtractor:
 def find_files_to_process(
     path: str,
     recursive: bool = False,
-    glob_pattern: Optional[str] = None,
+    glob_pattern: str | None = None,
     respect_gitignore: bool = True,
-) -> List[Path]:
+) -> list[Path]:
     """Find files to process, including extracting archives.
 
     Args:
@@ -216,12 +215,12 @@ def find_files_to_process(
     """
     path_obj = Path(path).expanduser().resolve()
     files = []
-    temp_dirs_to_cleanup = []
 
     # Load gitignore patterns if requested
     gitignore_patterns = []
     if respect_gitignore:
-        gitignore_patterns = _load_gitignore_patterns(path_obj if path_obj.is_dir() else path_obj.parent)
+        parent_dir = path_obj if path_obj.is_dir() else path_obj.parent
+        gitignore_patterns = _load_gitignore_patterns(parent_dir)
 
     if path_obj.is_file():
         if ArchiveExtractor.is_archive(path_obj):
@@ -230,7 +229,9 @@ def find_files_to_process(
             extracted_files = ArchiveExtractor.extract_archive(path_obj)
             # Filter to only supported document types
             for extracted_file in extracted_files:
-                if DocumentExtractor.is_supported(extracted_file) and not ArchiveExtractor.is_archive(extracted_file):
+                is_supported = DocumentExtractor.is_supported(extracted_file)
+                is_not_archive = not ArchiveExtractor.is_archive(extracted_file)
+                if is_supported and is_not_archive:
                     files.append(extracted_file)
         elif DocumentExtractor.is_supported(path_obj):
             files.append(path_obj)
@@ -241,7 +242,7 @@ def find_files_to_process(
                 candidate_files = path_obj.rglob(glob_pattern)
             else:
                 candidate_files = path_obj.glob(glob_pattern)
-            
+
             for file_path in candidate_files:
                 if file_path.is_file():
                     if ArchiveExtractor.is_archive(file_path):
@@ -250,7 +251,11 @@ def find_files_to_process(
                         extracted_files = ArchiveExtractor.extract_archive(file_path)
                         # Filter to only supported document types
                         for extracted_file in extracted_files:
-                            if DocumentExtractor.is_supported(extracted_file) and not ArchiveExtractor.is_archive(extracted_file):
+                            is_supported = DocumentExtractor.is_supported(extracted_file)
+                            is_not_archive = not ArchiveExtractor.is_archive(
+                                extracted_file
+                            )
+                            if is_supported and is_not_archive:
                                 files.append(extracted_file)
                     else:
                         files.append(file_path)
@@ -261,19 +266,33 @@ def find_files_to_process(
                     root_path = Path(root)
                     # Filter directories based on gitignore
                     if gitignore_patterns:
-                        dirs[:] = [d for d in dirs if not _is_ignored(root_path / d, gitignore_patterns)]
+                        filtered_dirs = [
+                            d for d in dirs
+                            if not _is_ignored(root_path / d, gitignore_patterns)
+                        ]
+                        dirs[:] = filtered_dirs
                     for filename in filenames:
                         file_path = root_path / filename
-                        if gitignore_patterns and _is_ignored(file_path, gitignore_patterns):
+                        if gitignore_patterns and _is_ignored(
+                            file_path, gitignore_patterns
+                        ):
                             continue
-                        
+
                         if ArchiveExtractor.is_archive(file_path):
                             # Extract archive and get files
                             logger.info(f"Extracting archive: {file_path.name}")
-                            extracted_files = ArchiveExtractor.extract_archive(file_path)
+                            extracted_files = ArchiveExtractor.extract_archive(
+                                file_path
+                            )
                             # Filter to only supported document types
                             for extracted_file in extracted_files:
-                                if DocumentExtractor.is_supported(extracted_file) and not ArchiveExtractor.is_archive(extracted_file):
+                                is_supported = DocumentExtractor.is_supported(
+                                    extracted_file
+                                )
+                                is_not_archive = not ArchiveExtractor.is_archive(
+                                    extracted_file
+                                )
+                                if is_supported and is_not_archive:
                                     files.append(extracted_file)
                         elif DocumentExtractor.is_supported(file_path):
                             files.append(file_path)
@@ -283,14 +302,20 @@ def find_files_to_process(
                         continue
                     if gitignore_patterns and _is_ignored(file_path, gitignore_patterns):
                         continue
-                    
+
                     if ArchiveExtractor.is_archive(file_path):
                         # Extract archive and get files
                         logger.info(f"Extracting archive: {file_path.name}")
                         extracted_files = ArchiveExtractor.extract_archive(file_path)
                         # Filter to only supported document types
                         for extracted_file in extracted_files:
-                            if DocumentExtractor.is_supported(extracted_file) and not ArchiveExtractor.is_archive(extracted_file):
+                            is_supported = DocumentExtractor.is_supported(
+                                extracted_file
+                            )
+                            is_not_archive = not ArchiveExtractor.is_archive(
+                                extracted_file
+                            )
+                            if is_supported and is_not_archive:
                                 files.append(extracted_file)
                     elif DocumentExtractor.is_supported(file_path):
                         files.append(file_path)
@@ -302,7 +327,7 @@ def find_files_to_process(
     return sorted(files)
 
 
-def _load_gitignore_patterns(directory: Path) -> List[str]:
+def _load_gitignore_patterns(directory: Path) -> list[str]:
     """Load .gitignore patterns from directory.
 
     Args:
@@ -314,7 +339,7 @@ def _load_gitignore_patterns(directory: Path) -> List[str]:
     patterns = []
     gitignore_path = directory / ".gitignore"
     if gitignore_path.exists():
-        with open(gitignore_path, "r", encoding="utf-8") as f:
+        with open(gitignore_path, encoding="utf-8") as f:
             for line in f:
                 line = line.strip()
                 if line and not line.startswith("#"):
@@ -322,7 +347,7 @@ def _load_gitignore_patterns(directory: Path) -> List[str]:
     return patterns
 
 
-def _is_ignored(path: Path, patterns: List[str]) -> bool:
+def _is_ignored(path: Path, patterns: list[str]) -> bool:
     """Check if path matches any gitignore pattern.
 
     Args:
