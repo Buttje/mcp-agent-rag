@@ -1,13 +1,10 @@
 """Database management for MCP-RAG."""
 
 import json
-import shutil
 import signal
-import sys
 import zipfile
 from datetime import datetime
 from pathlib import Path
-from typing import Dict, List, Optional
 
 import requests
 
@@ -39,7 +36,7 @@ class DatabaseManager:
             model=config.get("embedding_model", "nomic-embed-text"),
             host=config.get("ollama_host", "http://localhost:11434"),
         )
-        self.databases: Dict[str, VectorDatabase] = {}
+        self.databases: dict[str, VectorDatabase] = {}
         self._skip_current = False
 
     def create_database(self, name: str, description: str = "", prefix: str = "") -> bool:
@@ -76,12 +73,12 @@ class DatabaseManager:
     def add_documents(
         self,
         database_name: str,
-        path: Optional[str] = None,
-        url: Optional[str] = None,
-        glob_pattern: Optional[str] = None,
+        path: str | None = None,
+        url: str | None = None,
+        glob_pattern: str | None = None,
         recursive: bool = False,
         skip_existing: bool = False,
-    ) -> Dict[str, int]:
+    ) -> dict[str, int]:
         """Add documents to database.
 
         Args:
@@ -266,7 +263,7 @@ class DatabaseManager:
 
         return Path(temp_file.name)
 
-    def list_databases(self) -> Dict[str, Dict]:
+    def list_databases(self) -> dict[str, dict]:
         """List all databases.
 
         Returns:
@@ -274,7 +271,7 @@ class DatabaseManager:
         """
         return self.config.list_databases()
 
-    def load_database(self, name: str) -> Optional[VectorDatabase]:
+    def load_database(self, name: str) -> VectorDatabase | None:
         """Load a database into memory.
 
         Args:
@@ -306,7 +303,7 @@ class DatabaseManager:
             logger.error(f"Error loading database '{name}': {e}")
             return None
 
-    def load_multiple_databases(self, names: List[str]) -> Dict[str, VectorDatabase]:
+    def load_multiple_databases(self, names: list[str]) -> dict[str, VectorDatabase]:
         """Load multiple databases.
 
         Args:
@@ -322,7 +319,7 @@ class DatabaseManager:
                 loaded[name] = db
         return loaded
 
-    def export_databases(self, database_names: List[str], export_path: str) -> bool:
+    def export_databases(self, database_names: list[str], export_path: str) -> bool:
         """Export one or more databases to a ZIP file.
 
         Args:
@@ -333,13 +330,13 @@ class DatabaseManager:
             True if export was successful
         """
         export_file = Path(export_path)
-        
+
         # Validate all databases exist
         for name in database_names:
             if not self.config.database_exists(name):
                 logger.error(f"Database '{name}' does not exist")
                 return False
-        
+
         try:
             with zipfile.ZipFile(export_file, 'w', zipfile.ZIP_DEFLATED) as zipf:
                 # Create manifest with all database metadata
@@ -348,19 +345,19 @@ class DatabaseManager:
                     "export_date": datetime.now().isoformat(),
                     "databases": []
                 }
-                
+
                 for db_name in database_names:
                     db_info = self.config.get_database(db_name)
                     db_path = Path(db_info["path"])
-                    
+
                     # Verify database files exist
                     index_file = db_path / "index.faiss"
                     metadata_file = db_path / "metadata.pkl"
-                    
+
                     if not index_file.exists() or not metadata_file.exists():
                         logger.error(f"Database '{db_name}' files not found at {db_path}")
                         return False
-                    
+
                     # Add database metadata to manifest
                     manifest["databases"].append({
                         "name": db_name,
@@ -369,23 +366,23 @@ class DatabaseManager:
                         "last_updated": db_info.get("last_updated"),
                         "prefix": db_info.get("prefix", ""),
                     })
-                    
+
                     # Add database files to ZIP
                     zipf.write(index_file, f"{db_name}/index.faiss")
                     zipf.write(metadata_file, f"{db_name}/metadata.pkl")
-                
+
                 # Write manifest
                 manifest_json = json.dumps(manifest, indent=2)
                 zipf.writestr("manifest.json", manifest_json)
-            
+
             logger.info(f"Exported {len(database_names)} database(s) to {export_file}")
             return True
-            
+
         except Exception as e:
             logger.error(f"Error exporting databases: {e}")
             return False
 
-    def import_databases(self, import_path: str, overwrite: bool = False) -> Dict[str, bool]:
+    def import_databases(self, import_path: str, overwrite: bool = False) -> dict[str, bool]:
         """Import databases from a ZIP file.
 
         Args:
@@ -396,13 +393,13 @@ class DatabaseManager:
             Dictionary mapping database names to import success status
         """
         import_file = Path(import_path)
-        
+
         if not import_file.exists():
             logger.error(f"Import file not found: {import_file}")
             return {}
-        
+
         results = {}
-        
+
         try:
             with zipfile.ZipFile(import_file, 'r') as zipf:
                 # Read and validate manifest
@@ -412,31 +409,31 @@ class DatabaseManager:
                 except Exception as e:
                     logger.error(f"Error reading manifest: {e}")
                     return {}
-                
+
                 # Validate manifest version
                 if manifest.get("version") != "1.0":
                     logger.error("Unsupported manifest version")
                     return {}
-                
+
                 # Import each database
                 for db_info in manifest.get("databases", []):
                     db_name = db_info["name"]
-                    
+
                     # Check if database already exists
                     if self.config.database_exists(db_name) and not overwrite:
                         logger.warning(f"Database '{db_name}' already exists, skipping")
                         results[db_name] = False
                         continue
-                    
+
                     try:
                         # Create database directory
                         db_path = Config.get_default_data_dir() / "databases" / db_name
                         db_path.mkdir(parents=True, exist_ok=True)
-                        
+
                         # Extract database files
                         zipf.extract(f"{db_name}/index.faiss", db_path.parent)
                         zipf.extract(f"{db_name}/metadata.pkl", db_path.parent)
-                        
+
                         # Add or update database in config
                         if self.config.database_exists(db_name):
                             self.config.update_database(
@@ -454,21 +451,25 @@ class DatabaseManager:
                                 doc_count=db_info.get("doc_count", 0),
                                 prefix=db_info.get("prefix", ""),
                             )
-                            self.config.data["databases"][db_name]["last_updated"] = db_info.get("last_updated")
-                        
+                            self.config.data["databases"][db_name][
+                                "last_updated"
+                            ] = db_info.get("last_updated")
+
                         results[db_name] = True
                         logger.info(f"Imported database '{db_name}'")
-                        
+
                     except Exception as e:
                         logger.error(f"Error importing database '{db_name}': {e}")
                         results[db_name] = False
-                
+
                 # Save configuration
                 self.config.save()
-            
-            logger.info(f"Import completed: {sum(results.values())} successful, {len(results) - sum(results.values())} failed")
+
+            successful = sum(results.values())
+            failed = len(results) - successful
+            logger.info(f"Import completed: {successful} successful, {failed} failed")
             return results
-            
+
         except Exception as e:
             logger.error(f"Error importing databases: {e}")
             return {}

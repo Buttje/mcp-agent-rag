@@ -2,7 +2,6 @@
 
 import argparse
 import sys
-from pathlib import Path
 
 from mcp_agent_rag.config import Config
 from mcp_agent_rag.database import DatabaseManager
@@ -28,10 +27,13 @@ def main():
     db_subparsers = db_parser.add_subparsers(dest="db_command", help="Database commands")
 
     # database create
+    # database create
     create_parser = db_subparsers.add_parser("create", help="Create a new database")
     create_parser.add_argument("--name", required=True, help="Database name")
     create_parser.add_argument("--description", default="", help="Database description")
-    create_parser.add_argument("--prefix", default="", help="Prefix for MCP tool names (e.g., 'A1')")
+    create_parser.add_argument(
+        "--prefix", default="", help="Prefix for MCP tool names (e.g., 'A1')"
+    )
 
     # database add
     add_parser = db_subparsers.add_parser("add", help="Add documents to database")
@@ -43,17 +45,23 @@ def main():
     add_parser.add_argument("--skip-existing", action="store_true", help="Skip existing files")
 
     # database list
-    list_parser = db_subparsers.add_parser("list", help="List all databases")
+    db_subparsers.add_parser("list", help="List all databases")
 
     # database export
     export_parser = db_subparsers.add_parser("export", help="Export databases to a ZIP file")
-    export_parser.add_argument("--databases", required=True, help="Comma-separated list of database names to export")
+    export_parser.add_argument(
+        "--databases",
+        required=True,
+        help="Comma-separated list of database names to export",
+    )
     export_parser.add_argument("--output", required=True, help="Output ZIP file path")
 
     # database import
     import_parser = db_subparsers.add_parser("import", help="Import databases from a ZIP file")
     import_parser.add_argument("--file", required=True, help="ZIP file to import")
-    import_parser.add_argument("--overwrite", action="store_true", help="Overwrite existing databases")
+    import_parser.add_argument(
+        "--overwrite", action="store_true", help="Overwrite existing databases"
+    )
 
     # Server commands
     server_parser = subparsers.add_parser("server", help="Server management")
@@ -137,7 +145,7 @@ def handle_database_command(args, config: Config, logger):
             skip_existing=args.skip_existing,
         )
 
-        print(f"\nSummary:")
+        print("\nSummary:")
         print(f"  Processed: {stats['processed']}")
         print(f"  Skipped: {stats['skipped']}")
         print(f"  Failed: {stats['failed']}")
@@ -152,9 +160,17 @@ def handle_database_command(args, config: Config, logger):
             docs_width = 10
             desc_width = 30
             updated_width = 25
-            separator_length = name_width + prefix_width + docs_width + desc_width + updated_width
-            
-            print(f"\n{'Name':<{name_width}} {'Prefix':<{prefix_width}} {'Docs':<{docs_width}} {'Description':<{desc_width}} {'Last Updated':<{updated_width}}")
+            separator_length = (
+                name_width + prefix_width + docs_width + desc_width + updated_width
+            )
+
+            print(
+                f"\n{'Name':<{name_width}} "
+                f"{'Prefix':<{prefix_width}} "
+                f"{'Docs':<{docs_width}} "
+                f"{'Description':<{desc_width}} "
+                f"{'Last Updated':<{updated_width}}"
+            )
             print("-" * separator_length)
             for name, info in databases.items():
                 last_updated = info.get('last_updated') or 'Never'
@@ -169,33 +185,33 @@ def handle_database_command(args, config: Config, logger):
     elif args.db_command == "export":
         # Parse database names
         database_names = [db.strip() for db in args.databases.split(",")]
-        
+
         # Perform export
         success = db_manager.export_databases(database_names, args.output)
         if success:
             print(f"Successfully exported {len(database_names)} database(s) to {args.output}")
         else:
-            print(f"Error: Failed to export databases", file=sys.stderr)
+            print("Error: Failed to export databases", file=sys.stderr)
             sys.exit(1)
 
     elif args.db_command == "import":
         # Perform import
         results = db_manager.import_databases(args.file, args.overwrite)
-        
+
         if not results:
             print("Error: Failed to import databases", file=sys.stderr)
             sys.exit(1)
-        
+
         # Print results
         successful = [name for name, success in results.items() if success]
         failed = [name for name, success in results.items() if not success]
-        
-        print(f"\nImport Summary:")
+
+        print("\nImport Summary:")
         print(f"  Successful: {len(successful)}")
         if successful:
             for name in successful:
                 print(f"    - {name}")
-        
+
         if failed:
             print(f"  Failed/Skipped: {len(failed)}")
             for name in failed:
