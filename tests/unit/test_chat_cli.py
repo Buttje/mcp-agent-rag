@@ -148,29 +148,31 @@ def test_mcp_client_utf8_encoding():
 
 def test_chat_cli_main_no_databases(test_config, capsys):
     """Test chat CLI main with no databases."""
-    with patch("mcp_agent_rag.chat_cli.Config") as mock_config_class:
-        mock_config = Mock()
-        mock_config.get.side_effect = lambda key, default=None: {
-            "log_level": "INFO",
-        }.get(key, default)
-        mock_config_class.return_value = mock_config
+    test_args = ["mcp-rag-cli"]
+    
+    with patch.object(sys, "argv", test_args):
+        with patch("mcp_agent_rag.chat_cli.Config") as mock_config_class:
+            mock_config = Mock()
+            mock_config.get.side_effect = lambda key, default=None: {
+                "log_level": "INFO",
+            }.get(key, default)
+            mock_config_class.return_value = mock_config
 
-        with patch("mcp_agent_rag.chat_cli.Config.get_default_data_dir") as mock_dir:
-            mock_dir.return_value = test_config.config_path.parent
+            with patch("mcp_agent_rag.chat_cli.Config.get_default_data_dir") as mock_dir:
+                mock_dir.return_value = test_config.config_path.parent
 
-            with patch("mcp_agent_rag.chat_cli.setup_logger"):
-                with patch("mcp_agent_rag.chat_cli.DatabaseManager") as mock_db_manager_class:
-                    mock_db_manager = Mock()
-                    mock_db_manager.list_databases.return_value = {}
-                    mock_db_manager_class.return_value = mock_db_manager
+                with patch("mcp_agent_rag.chat_cli.setup_logger"):
+                    with patch("mcp_agent_rag.chat_cli.DatabaseManager") as mock_db_manager_class:
+                        mock_db_manager = Mock()
+                        mock_db_manager.list_databases.return_value = {}
+                        mock_db_manager_class.return_value = mock_db_manager
 
-                    with pytest.raises(SystemExit) as exc_info:
-                        from mcp_agent_rag.chat_cli import main
-                        main()
+                        with pytest.raises(SystemExit) as exc_info:
+                            main()
 
-                    assert exc_info.value.code == 1
-                    captured = capsys.readouterr()
-                    assert "No databases found" in captured.out
+                        assert exc_info.value.code == 1
+                        captured = capsys.readouterr()
+                        assert "No databases found" in captured.out
 
 
 def test_chat_cli_main_with_custom_log_file(test_config):
