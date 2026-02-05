@@ -240,7 +240,7 @@ def test_main_with_custom_log_file(test_config, capsys):
         "database",
         "list",
     ]
-    
+
     with patch.object(sys, "argv", test_args):
         with patch("mcp_agent_rag.cli.setup_logger") as mock_setup_logger:
             with patch("mcp_agent_rag.cli.DatabaseManager") as MockDBManager:
@@ -263,7 +263,7 @@ def test_main_with_default_log_file(test_config, capsys):
         "database",
         "list",
     ]
-    
+
     with patch.object(sys, "argv", test_args):
         with patch("mcp_agent_rag.cli.setup_logger") as mock_setup_logger:
             with patch("mcp_agent_rag.cli.DatabaseManager") as MockDBManager:

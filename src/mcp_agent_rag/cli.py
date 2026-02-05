@@ -103,7 +103,7 @@ def main():
     else:
         log_dir = Config.get_default_data_dir() / "logs"
         log_file = str(log_dir / "mcp-rag.log")
-    
+
     setup_logger(
         log_file=log_file,
         level=config.get("log_level", "INFO"),

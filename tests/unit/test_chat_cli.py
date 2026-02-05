@@ -149,7 +149,7 @@ def test_mcp_client_utf8_encoding():
 def test_chat_cli_main_no_databases(test_config, capsys):
     """Test chat CLI main with no databases."""
     test_args = ["mcp-rag-cli"]
-    
+
     with patch.object(sys, "argv", test_args):
         with patch("mcp_agent_rag.chat_cli.Config") as mock_config_class:
             mock_config = Mock()
@@ -178,7 +178,7 @@ def test_chat_cli_main_no_databases(test_config, capsys):
 def test_chat_cli_main_with_custom_log_file(test_config):
     """Test chat CLI main with custom log file argument."""
     test_args = ["mcp-rag-cli", "--log", "/tmp/custom-chat.log"]
-    
+
     with patch.object(sys, "argv", test_args):
         with patch("mcp_agent_rag.chat_cli.setup_logger") as mock_setup_logger:
             with patch("mcp_agent_rag.chat_cli.DatabaseManager") as MockDBManager:
@@ -198,7 +198,7 @@ def test_chat_cli_main_with_custom_log_file(test_config):
 def test_chat_cli_main_with_default_log_file(test_config):
     """Test chat CLI main with default log file."""
     test_args = ["mcp-rag-cli"]
-    
+
     with patch.object(sys, "argv", test_args):
         with patch("mcp_agent_rag.chat_cli.setup_logger") as mock_setup_logger:
             with patch("mcp_agent_rag.chat_cli.DatabaseManager") as MockDBManager:
