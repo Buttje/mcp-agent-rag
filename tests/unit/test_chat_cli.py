@@ -185,10 +185,10 @@ def test_chat_cli_main_with_custom_log_file(test_config):
                 mock_db_manager = Mock()
                 mock_db_manager.list_databases.return_value = {}
                 MockDBManager.return_value = mock_db_manager
-                
+
                 with pytest.raises(SystemExit):
                     main()
-                
+
                 # Verify setup_logger was called with the custom log file
                 mock_setup_logger.assert_called_once()
                 call_args = mock_setup_logger.call_args
@@ -205,10 +205,10 @@ def test_chat_cli_main_with_default_log_file(test_config):
                 mock_db_manager = Mock()
                 mock_db_manager.list_databases.return_value = {}
                 MockDBManager.return_value = mock_db_manager
-                
+
                 with pytest.raises(SystemExit):
                     main()
-                
+
                 # Verify setup_logger was called with the default log file
                 mock_setup_logger.assert_called_once()
                 call_args = mock_setup_logger.call_args
