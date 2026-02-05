@@ -1,7 +1,5 @@
 """Tests for CLI."""
 
-import sys
-from io import StringIO
 from unittest.mock import Mock, patch
 
 import pytest
@@ -28,11 +26,12 @@ def test_handle_database_create(test_config, mock_db_manager):
     args.db_command = "create"
     args.name = "newdb"
     args.description = "Test DB"
+    args.prefix = ""
 
     with patch("mcp_agent_rag.cli.DatabaseManager", return_value=mock_db_manager):
         handle_database_command(args, test_config, Mock())
 
-    mock_db_manager.create_database.assert_called_once_with("newdb", "Test DB")
+    mock_db_manager.create_database.assert_called_once_with("newdb", "Test DB", "")
 
 
 def test_handle_database_add(test_config, mock_db_manager):
@@ -140,7 +139,7 @@ def test_handle_server_start_with_cody_flag(test_config):
     with patch("mcp_agent_rag.cli.MCPServer") as MockMCPServer:
         MockMCPServer.return_value = mock_server
         handle_server_command(args, test_config, Mock())
-        
+
         # Verify MCPServer was called with 2024-11-05 protocol version
         MockMCPServer.assert_called_once()
         call_args = MockMCPServer.call_args
@@ -166,7 +165,7 @@ def test_handle_server_start_without_cody_flag(test_config):
     with patch("mcp_agent_rag.cli.MCPServer") as MockMCPServer:
         MockMCPServer.return_value = mock_server
         handle_server_command(args, test_config, Mock())
-        
+
         # Verify MCPServer was called with 2025-11-25 protocol version
         MockMCPServer.assert_called_once()
         call_args = MockMCPServer.call_args
@@ -194,7 +193,7 @@ def test_handle_server_start_http_with_cody_flag(test_config):
     with patch("mcp_agent_rag.cli.MCPServer") as MockMCPServer:
         MockMCPServer.return_value = mock_server
         handle_server_command(args, test_config, Mock())
-        
+
         # Verify MCPServer was called with 2024-11-05 protocol version
         MockMCPServer.assert_called_once()
         call_args = MockMCPServer.call_args
@@ -222,7 +221,7 @@ def test_handle_server_start_sse_with_cody_flag(test_config):
     with patch("mcp_agent_rag.cli.MCPServer") as MockMCPServer:
         MockMCPServer.return_value = mock_server
         handle_server_command(args, test_config, Mock())
-        
+
         # Verify MCPServer was called with 2024-11-05 protocol version
         MockMCPServer.assert_called_once()
         call_args = MockMCPServer.call_args
