@@ -1,6 +1,7 @@
 """RAG package initialization."""
 
 from mcp_agent_rag.rag.archive_extractor import ArchiveExtractor
+from mcp_agent_rag.rag.bm25 import BM25Index, HybridRetriever
 from mcp_agent_rag.rag.cache import EmbeddingCache
 from mcp_agent_rag.rag.embedder import OllamaEmbedder
 from mcp_agent_rag.rag.extractor import DocumentExtractor, find_files_to_process
@@ -12,8 +13,10 @@ from mcp_agent_rag.rag.vector_db import VectorDatabase
 
 __all__ = [
     "ArchiveExtractor",
+    "BM25Index",
     "EmbeddingCache",
     "FileManifest",
+    "HybridRetriever",
     "OllamaEmbedder",
     "OllamaGenerator",
     "DocumentExtractor",
