@@ -5,6 +5,7 @@ import os
 from pathlib import Path
 
 import chardet
+import numpy as np
 import pypdf
 from bs4 import BeautifulSoup
 from docx import Document as DocxDocument
@@ -22,6 +23,8 @@ logger = get_logger(__name__)
 
 # Global OCR reader instance (lazy loaded)
 _ocr_reader = None
+# Sentinel object to indicate OCR initialization failure
+_OCR_UNAVAILABLE = object()
 
 
 class DocumentExtractor:
@@ -70,8 +73,8 @@ class DocumentExtractor:
             except Exception as e:
                 logger.error(f"Failed to initialize EasyOCR: {e}")
                 logger.error("Image text extraction will be unavailable")
-                _ocr_reader = False  # Mark as failed to avoid retrying
-        return _ocr_reader if _ocr_reader is not False else None
+                _ocr_reader = _OCR_UNAVAILABLE  # Mark as failed to avoid retrying
+        return _ocr_reader if _ocr_reader is not _OCR_UNAVAILABLE else None
 
     @staticmethod
     def extract_text(file_path: Path) -> str | None:
@@ -343,7 +346,6 @@ class DocumentExtractor:
                 img = img.convert('RGB')
             
             # Convert to numpy array for EasyOCR
-            import numpy as np
             img_array = np.array(img)
             
             # Perform OCR
