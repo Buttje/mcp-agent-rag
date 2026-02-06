@@ -4,7 +4,8 @@ A Python implementation of a Model Context Protocol (MCP) server that provides r
 
 ## Features
 
-- **Multi-Format Document Support**: Ingest .txt, .docx, .xlsx, .pptx, .odt, .ods, .odp, .pdf, HTML, and source code files
+- **Multi-Format Document Support**: Ingest .txt, .docx, .xlsx, .pptx, .odt, .ods, .odp, .pdf, HTML, images, and source code files
+- **Image OCR Support**: Extract text from images (PNG, JPEG, GIF, BMP, TIFF, WebP) and embedded images in documents using EasyOCR
 - **Smart RAG Pipeline**: Automatic text extraction, cleaning, chunking with overlap, and embedding generation
 - **Vector Database**: FAISS-based indexing with metadata persistence
 - **Import/Export**: Export and import databases as ZIP files for easy sharing and backup
@@ -17,7 +18,7 @@ A Python implementation of a Model Context Protocol (MCP) server that provides r
 - **Resource Templates**: Dynamic resource discovery via `resources/templates/list`
 - **CLI Interface**: Easy-to-use command-line tools for database and server management
 - **Cross-Platform**: Works on Windows 10/11 and Ubuntu 22.04 LTS
-- **Comprehensive Testing**: 241+ tests with 73%+ coverage
+- **Comprehensive Testing**: 350+ tests with 73%+ coverage
 
 ## Requirements
 
@@ -520,12 +521,31 @@ mcp-agent-rag/
 ## Supported File Formats
 
 - **Text**: .txt, .md
-- **Office**: .docx, .xlsx, .pptx
+- **Office**: .docx, .xlsx, .pptx (including embedded images with OCR)
 - **OpenDocument**: .odt, .ods, .odp
-- **PDF**: .pdf
+- **PDF**: .pdf (including embedded images with OCR)
 - **Web**: .html, .htm
+- **Images**: .png, .jpg, .jpeg, .gif, .bmp, .tiff, .tif, .webp (with OCR text extraction)
 - **Source Code**: .py, .c, .cpp, .h, .hpp, .cs, .go, .rs, .java, .js, .ts, .sh, .bat, .ps1, .s, .asm
 - **Build Files**: Makefile, CMakeLists.txt
+- **Archives**: .zip, .7z, .tar, .tar.gz, .tgz, .tar.bz2, .tar.xz, .rar
+
+### Image Support
+
+The tool now supports extracting text from images using OCR (Optical Character Recognition). This includes:
+
+- **Standalone Image Files**: PNG, JPEG, GIF, BMP, TIFF, and WebP formats
+- **Embedded Images in Documents**: Images within PDF, DOCX, and PPTX files are automatically extracted and processed
+- **OCR Technology**: Uses EasyOCR for high-quality text recognition
+- **Automatic Processing**: Image text extraction happens automatically when adding documents to the database
+- **Performance**: OCR reader is lazily initialized only when needed to minimize startup time
+
+When you add documents containing images or add image files directly, the tool will:
+1. Detect images in supported formats
+2. Initialize the OCR reader (first time only)
+3. Extract text from the images
+4. Combine the extracted text with other document content
+5. Index everything together for semantic search
 
 ## License
 

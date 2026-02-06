@@ -1,9 +1,11 @@
 """Document extraction utilities."""
 
+import io
 import os
 from pathlib import Path
 
 import chardet
+import numpy as np
 import pypdf
 from bs4 import BeautifulSoup
 from docx import Document as DocxDocument
@@ -11,12 +13,18 @@ from odf import teletype
 from odf import text as odf_text
 from odf.opendocument import load as odf_load
 from openpyxl import load_workbook
+from PIL import Image
 from pptx import Presentation
 
 from mcp_agent_rag.rag.archive_extractor import ArchiveExtractor
 from mcp_agent_rag.utils import get_logger
 
 logger = get_logger(__name__)
+
+# Global OCR reader instance (lazy loaded)
+_ocr_reader = None
+# Sentinel object to indicate OCR initialization failure
+_OCR_UNAVAILABLE = object()
 
 
 class DocumentExtractor:
@@ -27,7 +35,8 @@ class DocumentExtractor:
         ".java", ".js", ".ts", ".sh", ".bat", ".ps1", ".s", ".asm",
         ".docx", ".xlsx", ".pptx", ".odt", ".ods", ".odp", ".pdf", ".html", ".htm",
         ".zip", ".7z", ".gz", ".tar", ".tar.gz", ".tgz", ".tar.bz2", ".tbz2",
-        ".tar.xz", ".txz", ".rar"
+        ".tar.xz", ".txz", ".rar",
+        ".png", ".jpg", ".jpeg", ".gif", ".bmp", ".tiff", ".tif", ".webp"
     }
 
     @staticmethod
@@ -46,6 +55,26 @@ class DocumentExtractor:
             if path_str.endswith(ext):
                 return True
         return False
+
+    @staticmethod
+    def _get_ocr_reader():
+        """Get or initialize the OCR reader (lazy loading).
+        
+        Returns:
+            EasyOCR reader instance or None if initialization fails
+        """
+        global _ocr_reader
+        if _ocr_reader is None:
+            try:
+                import easyocr
+                logger.info("Initializing EasyOCR reader (this may take a moment)...")
+                _ocr_reader = easyocr.Reader(['en'], gpu=False, verbose=False)
+                logger.info("EasyOCR reader initialized successfully")
+            except Exception as e:
+                logger.error(f"Failed to initialize EasyOCR: {e}")
+                logger.error("Image text extraction will be unavailable")
+                _ocr_reader = _OCR_UNAVAILABLE  # Mark as failed to avoid retrying
+        return _ocr_reader if _ocr_reader is not _OCR_UNAVAILABLE else None
 
     @staticmethod
     def extract_text(file_path: Path) -> str | None:
@@ -80,6 +109,8 @@ class DocumentExtractor:
                 return DocumentExtractor._extract_pdf(file_path)
             elif suffix in {".html", ".htm"}:
                 return DocumentExtractor._extract_html(file_path)
+            elif suffix in {".png", ".jpg", ".jpeg", ".gif", ".bmp", ".tiff", ".tif", ".webp"}:
+                return DocumentExtractor._extract_image(file_path)
             else:
                 logger.warning(f"Unsupported file format: {suffix}")
                 return None
@@ -103,9 +134,34 @@ class DocumentExtractor:
 
     @staticmethod
     def _extract_docx(file_path: Path) -> str:
-        """Extract text from DOCX file."""
+        """Extract text from DOCX file, including OCR on embedded images."""
         doc = DocxDocument(str(file_path))
-        return "\n".join([para.text for para in doc.paragraphs])
+        text_parts = []
+        
+        # Extract regular text
+        for para in doc.paragraphs:
+            text_parts.append(para.text)
+        
+        # Extract text from images if OCR is available
+        if DocumentExtractor._get_ocr_reader() is not None:
+            try:
+                # Access document relationships to get images
+                for rel_id, rel in doc.part.rels.items():
+                    if "image" in rel.target_ref:
+                        try:
+                            image_data = rel.target_part.blob
+                            image_text = DocumentExtractor._extract_text_from_image_bytes(
+                                image_data,
+                                f"DOCX embedded image {rel_id}"
+                            )
+                            if image_text.strip():
+                                text_parts.append(f"\n[Embedded Image]:\n{image_text}")
+                        except Exception as e:
+                            logger.debug(f"Could not extract text from embedded image: {e}")
+            except Exception as e:
+                logger.debug(f"Could not access images in DOCX: {e}")
+        
+        return "\n".join(text_parts)
 
     @staticmethod
     def _extract_xlsx(file_path: Path) -> str:
@@ -123,14 +179,29 @@ class DocumentExtractor:
 
     @staticmethod
     def _extract_pptx(file_path: Path) -> str:
-        """Extract text from PPTX file."""
+        """Extract text from PPTX file, including OCR on embedded images."""
         prs = Presentation(str(file_path))
         text_parts = []
         for i, slide in enumerate(prs.slides):
             text_parts.append(f"Slide {i + 1}:")
             for shape in slide.shapes:
+                # Extract text from shapes
                 if hasattr(shape, "text"):
                     text_parts.append(shape.text)
+                
+                # Extract text from images if OCR is available
+                if DocumentExtractor._get_ocr_reader() is not None:
+                    if hasattr(shape, "image"):
+                        try:
+                            image_data = shape.image.blob
+                            image_text = DocumentExtractor._extract_text_from_image_bytes(
+                                image_data,
+                                f"PPTX slide {i + 1} image"
+                            )
+                            if image_text.strip():
+                                text_parts.append(f"[Image]:\n{image_text}")
+                        except Exception as e:
+                            logger.debug(f"Could not extract text from slide image: {e}")
         return "\n".join(text_parts)
 
     @staticmethod
@@ -175,14 +246,31 @@ class DocumentExtractor:
 
     @staticmethod
     def _extract_pdf(file_path: Path) -> str:
-        """Extract text from PDF file."""
+        """Extract text from PDF file, including OCR on embedded images."""
         with open(file_path, "rb") as f:
             reader = pypdf.PdfReader(f)
             text_parts = []
             for i, page in enumerate(reader.pages):
+                # Extract regular text
                 text = page.extract_text()
                 if text.strip():
                     text_parts.append(f"Page {i + 1}:\n{text}")
+                
+                # Extract images and perform OCR if available
+                if hasattr(page, 'images') and DocumentExtractor._get_ocr_reader() is not None:
+                    for img_index, image in enumerate(page.images):
+                        try:
+                            image_text = DocumentExtractor._extract_text_from_image_bytes(
+                                image.data,
+                                f"PDF page {i + 1} image {img_index + 1}"
+                            )
+                            if image_text.strip():
+                                text_parts.append(
+                                    f"Page {i + 1} - Image {img_index + 1}:\n{image_text}"
+                                )
+                        except Exception as e:
+                            logger.debug(f"Could not extract text from image on page {i + 1}: {e}")
+                            
             return "\n".join(text_parts)
 
     @staticmethod
@@ -194,6 +282,87 @@ class DocumentExtractor:
             for script in soup(["script", "style"]):
                 script.decompose()
             return soup.get_text(separator="\n", strip=True)
+
+    @staticmethod
+    def _extract_image(file_path: Path) -> str:
+        """Extract text from image file using OCR.
+        
+        Args:
+            file_path: Path to image file
+            
+        Returns:
+            Extracted text from image or empty string if no text found
+        """
+        reader = DocumentExtractor._get_ocr_reader()
+        if reader is None:
+            logger.warning(f"OCR not available, cannot extract text from {file_path}")
+            return ""
+        
+        try:
+            # Read image
+            img = Image.open(file_path)
+            
+            # Convert to RGB if necessary (EasyOCR works best with RGB)
+            if img.mode not in ('RGB', 'L'):
+                img = img.convert('RGB')
+            
+            # Perform OCR
+            results = reader.readtext(str(file_path), detail=0)
+            
+            # Combine results
+            if results:
+                extracted_text = "\n".join(results)
+                logger.debug(f"Extracted {len(results)} text blocks from {file_path.name}")
+                return extracted_text
+            else:
+                logger.debug(f"No text found in image {file_path.name}")
+                return ""
+                
+        except Exception as e:
+            logger.error(f"Error extracting text from image {file_path}: {e}")
+            return ""
+
+    @staticmethod
+    def _extract_text_from_image_bytes(image_bytes: bytes, source_name: str = "embedded") -> str:
+        """Extract text from image bytes using OCR.
+        
+        Args:
+            image_bytes: Image data as bytes
+            source_name: Name/description of the image source for logging
+            
+        Returns:
+            Extracted text from image or empty string if no text found
+        """
+        reader = DocumentExtractor._get_ocr_reader()
+        if reader is None:
+            return ""
+        
+        try:
+            # Open image from bytes
+            img = Image.open(io.BytesIO(image_bytes))
+            
+            # Convert to RGB if necessary
+            if img.mode not in ('RGB', 'L'):
+                img = img.convert('RGB')
+            
+            # Convert to numpy array for EasyOCR
+            img_array = np.array(img)
+            
+            # Perform OCR
+            results = reader.readtext(img_array, detail=0)
+            
+            # Combine results
+            if results:
+                extracted_text = "\n".join(results)
+                logger.debug(f"Extracted {len(results)} text blocks from {source_name}")
+                return extracted_text
+            else:
+                logger.debug(f"No text found in {source_name}")
+                return ""
+                
+        except Exception as e:
+            logger.error(f"Error extracting text from {source_name}: {e}")
+            return ""
 
 
 def find_files_to_process(
