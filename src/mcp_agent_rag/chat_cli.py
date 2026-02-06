@@ -185,13 +185,28 @@ def create_mcp_tool_query_data(mcp_client: MCPClient):
 
 def main():
     """Main chat CLI entry point with MCP server and AGNO agent."""
+    import argparse
+
+    # Parse command-line arguments
+    parser = argparse.ArgumentParser(description="MCP-RAG Interactive Chat Client")
+    parser.add_argument(
+        "--log",
+        default=None,
+        help="Path to log file (default: ~/.mcp-agent-rag/logs/mcp-rag-cli.log)",
+    )
+    args = parser.parse_args()
+
     # Load configuration
     config = Config()
 
     # Setup logging
-    log_dir = Config.get_default_data_dir() / "logs"
-    log_file = log_dir / "mcp-rag-cli.log"
-    setup_logger(log_file=str(log_file), level=config.get("log_level", "INFO"))
+    if args.log:
+        log_file = args.log
+    else:
+        log_dir = Config.get_default_data_dir() / "logs"
+        log_file = str(log_dir / "mcp-rag-cli.log")
+
+    setup_logger(log_file=log_file, level=config.get("log_level", "INFO"))
     logger = get_logger("mcp-rag-cli")
 
     print("=" * 70)
