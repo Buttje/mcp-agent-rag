@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.0] - 2026-02-06
+
 ### Fixed
 - Fixed 404/405 errors when connecting to Ollama server by adding automatic API version detection
 - Added fallback support for older Ollama versions (< 0.1.14) that don't have the `/api/chat` endpoint

@@ -2,4 +2,4 @@
 MCP-RAG: Model Context Protocol server with Retrieval Augmented Generation.
 """
 
-__version__ = "0.1.0"
+__version__ = "0.2.0"
