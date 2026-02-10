@@ -73,7 +73,7 @@ class MCPClient:
                 raise RuntimeError(error_msg)
 
             result = response.get("result", {})
-            
+
             if self.verbose:
                 # Show a summary of the result
                 if "context" in result:
@@ -85,7 +85,7 @@ class MCPClient:
                 else:
                     print(f"   ✅ Result: {result}")
                 print()
-            
+
             return result
 
         except Exception as e:
@@ -183,7 +183,7 @@ def create_mcp_tool_query_data(mcp_client: MCPClient, verbose: bool = False):
             print(f"   Reason: Need to search document databases for information")
             print(f"   Query: {prompt}")
             print(f"   Max results: {max_results}")
-        
+
         try:
             result = mcp_client.call_tool(
                 "query-get_data", {"prompt": prompt, "max_results": max_results}
@@ -344,13 +344,13 @@ def main():
         # The config stores the Ollama model name (e.g., "mistral:7b-instruct")
         # We prefix it with "ollama:" to get the AGNO format (e.g., "ollama:mistral:7b-instruct")
         generative_model = config.get("generative_model", "mistral:7b-instruct")
-        
+
         # Handle both cases: model with or without "ollama:" prefix
         if not generative_model.startswith("ollama:"):
             model_string = f"ollama:{generative_model}"
         else:
             model_string = generative_model
-        
+
         # Initialize AGNO agent with Ollama model
         agent = Agent(
             name="MCP-RAG Assistant",
@@ -405,24 +405,24 @@ def main():
 
                 # Process query with agent
                 print()
-                
+
                 # Use the agent to process the query with ReAct mechanism
                 try:
                     if args.verbose:
                         # In verbose mode, show the thinking process
                         print("🤔 [Agent Thinking...]")
                         print()
-                    
+
                     print("Assistant: ", end="", flush=True)
                     response = agent.run(user_input)
-                    
+
                     # Print the agent's response
                     if hasattr(response, 'content'):
                         print(response.content)
                     else:
                         print(str(response))
                     print()
-                    
+
                 except Exception as e:
                     logger.error(f"Error running agent: {e}", exc_info=True)
                     print(f"\nError processing query: {e}", file=sys.stderr)

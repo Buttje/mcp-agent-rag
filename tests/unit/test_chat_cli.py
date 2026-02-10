@@ -59,7 +59,7 @@ def test_mcp_client_call_tool_verbose(capsys):
 
     assert result["context"] == "test context"
     assert result["citations"] == [{"source": "test.txt"}]
-    
+
     # Check verbose output
     captured = capsys.readouterr()
     assert "🔧 [MCP Tool Call]" in captured.out
@@ -133,13 +133,13 @@ def test_create_mcp_tool_query_data_verbose(capsys):
 
     assert "Test context" in result
     assert "test.txt" in result
-    
+
     # Check verbose output
     captured = capsys.readouterr()
     assert "💭 [Agent Decision: Using query_data tool]" in captured.out
     assert "Query: test prompt" in captured.out
     assert "Max results: 3" in captured.out
-    
+
     mock_client.call_tool.assert_called_once_with(
         "query-get_data", {"prompt": "test prompt", "max_results": 3}
     )
@@ -285,5 +285,5 @@ def test_chat_cli_main_with_verbose_flag(test_config):
 
                 with pytest.raises(SystemExit):
                     main()
-                
+
                 # Test passes if no exceptions during parsing (SystemExit expected for no databases)
