@@ -2,6 +2,7 @@
 
 import io
 import os
+import warnings
 from pathlib import Path
 
 import chardet
@@ -68,7 +69,19 @@ class DocumentExtractor:
             try:
                 import easyocr
                 logger.info("Initializing EasyOCR reader (this may take a moment)...")
-                _ocr_reader = easyocr.Reader(['en'], gpu=False, verbose=False)
+                
+                # Suppress the pin_memory warning when using CPU-only mode
+                # This warning occurs because EasyOCR's internal DataLoader uses pin_memory=True
+                # by default, but pin_memory is only beneficial when using GPU acceleration.
+                # Since we're using gpu=False, the warning is harmless and can be safely ignored.
+                with warnings.catch_warnings():
+                    warnings.filterwarnings(
+                        'ignore',
+                        message=".*pin_memory.*no accelerator.*",
+                        category=UserWarning
+                    )
+                    _ocr_reader = easyocr.Reader(['en'], gpu=False, verbose=False)
+                
                 logger.info("EasyOCR reader initialized successfully")
             except Exception as e:
                 logger.error(f"Failed to initialize EasyOCR: {e}")
