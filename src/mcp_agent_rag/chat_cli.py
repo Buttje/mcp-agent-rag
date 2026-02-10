@@ -304,21 +304,32 @@ def main():
         # Create MCP query tool
         query_tool = create_mcp_tool_query_data(mcp_client)
 
-        # Initialize AGNO agent
-        # Note: AGNO Agent can work without a model if we only use tools
-        # For actual LLM integration, we'd need to configure Ollama integration
-        # Currently, we'll use the agent infrastructure but call tools directly
-        _agent = Agent(
+        # Get the generative model from config
+        # The config stores the Ollama model name (e.g., "mistral:7b-instruct")
+        # We prefix it with "ollama:" to get the AGNO format (e.g., "ollama:mistral:7b-instruct")
+        generative_model = config.get("generative_model", "mistral:7b-instruct")
+        
+        # Handle both cases: model with or without "ollama:" prefix
+        if not generative_model.startswith("ollama:"):
+            model_string = f"ollama:{generative_model}"
+        else:
+            model_string = generative_model
+        
+        # Initialize AGNO agent with Ollama model
+        agent = Agent(
             name="MCP-RAG Assistant",
+            model=model_string,
             description="An AI assistant that can query document databases via MCP server",
             instructions=[
                 "You are a helpful AI assistant with access to document databases.",
                 "When users ask questions, use the query_data tool to search relevant information.",
                 "Provide clear, accurate answers based on the retrieved context.",
                 "Always cite your sources when providing information from the databases.",
+                "Think step by step about what information you need and how to answer the question.",
             ],
             tools=[query_tool],
             markdown=True,
+            reasoning=True,  # Enable ReAct (Reasoning and Act) mechanism
         )
 
         print("Agent initialized successfully!")
@@ -331,6 +342,8 @@ def main():
     except Exception as e:
         logger.error(f"Failed to initialize agent: {e}", exc_info=True)
         print(f"Error: Failed to initialize agent: {e}", file=sys.stderr)
+        print(f"\nMake sure Ollama is running and the model '{model_string}' is available.", file=sys.stderr)
+        print(f"You can pull the model with: ollama pull {generative_model}", file=sys.stderr)
         mcp_client.close()
         sys.exit(1)
 
@@ -351,13 +364,23 @@ def main():
 
                 # Process query with agent
                 print()
-                # In a real implementation, we would use agent.run() with a configured model
-                # For now, we directly call the tool since AGNO requires model configuration
-                print("Searching databases...")
-                result = query_tool(user_input)
-                print("\nAssistant:")
-                print(result)
-                print()
+                print("Assistant: ", end="", flush=True)
+                
+                # Use the agent to process the query with ReAct mechanism
+                try:
+                    response = agent.run(user_input)
+                    
+                    # Print the agent's response
+                    if hasattr(response, 'content'):
+                        print(response.content)
+                    else:
+                        print(str(response))
+                    print()
+                    
+                except Exception as e:
+                    logger.error(f"Error running agent: {e}", exc_info=True)
+                    print(f"\nError processing query: {e}", file=sys.stderr)
+                    print()
 
             except KeyboardInterrupt:
                 print("\n\nGoodbye!")
