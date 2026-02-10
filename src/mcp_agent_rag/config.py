@@ -35,7 +35,23 @@ class Config:
         """Load existing config or create default."""
         if self.config_path.exists():
             with open(self.config_path, "r", encoding="utf-8") as f:
-                return json.load(f)
+                data = json.load(f)
+            
+            # Ensure new fields exist with defaults
+            defaults = self._create_default()
+            updated = False
+            for key in ["query_inference_threshold", "iteration_confidence_threshold", "final_augmentation_threshold"]:
+                if key not in data:
+                    data[key] = defaults[key]
+                    updated = True
+            
+            # Auto-save if we added new fields
+            if updated:
+                self.config_path.parent.mkdir(parents=True, exist_ok=True)
+                with open(self.config_path, "w", encoding="utf-8") as f:
+                    json.dump(data, f, indent=2)
+            
+            return data
         return self._create_default()
 
     def _create_default(self) -> Dict[str, Any]:
@@ -51,6 +67,10 @@ class Config:
             "max_context_length": 4000,
             "gpu_enabled": True,  # Enable GPU usage when available (users can disable)
             "gpu_device": None,  # None = auto-detect, or specify device index
+            # Agentic RAG inference probability thresholds
+            "query_inference_threshold": 0.80,  # Inference threshold for generating RAG queries
+            "iteration_confidence_threshold": 0.90,  # Threshold for accepting information completeness
+            "final_augmentation_threshold": 0.80,  # Inference threshold for final prompt augmentation
         }
 
     def save(self) -> None:

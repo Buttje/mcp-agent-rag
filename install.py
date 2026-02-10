@@ -488,7 +488,26 @@ def main():
             print("Preserving existing configuration...")
             with open(config_path) as f:
                 config = json.load(f)
-            print("Configuration preserved")
+            
+            # Add new agentic RAG fields if they don't exist
+            needs_save = False
+            if "query_inference_threshold" not in config:
+                config["query_inference_threshold"] = 0.80
+                needs_save = True
+            if "iteration_confidence_threshold" not in config:
+                config["iteration_confidence_threshold"] = 0.90
+                needs_save = True
+            if "final_augmentation_threshold" not in config:
+                config["final_augmentation_threshold"] = 0.80
+                needs_save = True
+            
+            if needs_save:
+                print("Adding new agentic RAG configuration fields...")
+                with open(config_path, "w") as f:
+                    json.dump(config, f, indent=2)
+                print("Configuration updated")
+            else:
+                print("Configuration preserved")
         else:
             print("\nSetting up configuration...")
             # Pass actual GPU status from setup, defaulting to True to auto-detect at runtime
@@ -544,6 +563,10 @@ def create_config(no_prompt: bool, gpu_enabled: bool = True) -> dict:
         "max_context_length": 4000,
         "gpu_enabled": gpu_enabled,
         "gpu_device": None,
+        # Agentic RAG inference probability thresholds
+        "query_inference_threshold": 0.80,  # Inference threshold for generating RAG queries
+        "iteration_confidence_threshold": 0.90,  # Threshold for accepting information completeness
+        "final_augmentation_threshold": 0.80,  # Inference threshold for final prompt augmentation
     }
 
     if no_prompt:

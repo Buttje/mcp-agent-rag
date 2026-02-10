@@ -183,6 +183,10 @@ class EnhancedConfig:
             "profile": self.profile_name,
             "ollama_host": "http://localhost:11434",
             "databases": {},
+            # Agentic RAG inference probability thresholds
+            "query_inference_threshold": 0.80,  # Inference threshold for generating RAG queries
+            "iteration_confidence_threshold": 0.90,  # Threshold for accepting information completeness
+            "final_augmentation_threshold": 0.80,  # Inference threshold for final prompt augmentation
             **profile_config,
         }
 
@@ -205,6 +209,12 @@ class EnhancedConfig:
             
             data["schema_version"] = 2
             data["profile"] = data.get("profile", "default")
+        
+        # Ensure agentic RAG fields exist
+        defaults = self._create_default()
+        for key in ["query_inference_threshold", "iteration_confidence_threshold", "final_augmentation_threshold"]:
+            if key not in data:
+                data[key] = defaults[key]
             
             logger.info("Config migrated from v1 to v2")
 
