@@ -239,7 +239,12 @@ def test_pdf_extraction_handles_encrypted_pdf_gracefully(temp_dir):
     writer = pypdf.PdfWriter()
     page = pypdf.PageObject.create_blank_page(width=200, height=200)
     writer.add_page(page)
-    writer.encrypt(user_password="test123", owner_password="owner123", algorithm="AES-256")
+    # Use obvious test passwords to indicate these are not real credentials
+    writer.encrypt(
+        user_password="test_user_password",
+        owner_password="test_owner_password",
+        algorithm="AES-256"
+    )
     
     with open(pdf_path, "wb") as f:
         writer.write(f)

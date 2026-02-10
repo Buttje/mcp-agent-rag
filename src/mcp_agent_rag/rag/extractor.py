@@ -1,6 +1,7 @@
 """Document extraction utilities."""
 
 import io
+import logging
 import os
 import warnings
 from pathlib import Path
@@ -290,8 +291,6 @@ class DocumentExtractor:
     @staticmethod
     def _extract_pdf(file_path: Path) -> str:
         """Extract text from PDF file, including OCR on embedded images."""
-        import logging
-        
         # Suppress pypdf warnings about malformed PDFs
         # These warnings (Invalid Lookup Table, Fax4Decode errors, image mask size mismatches)
         # are non-fatal and occur when processing PDFs with corrupted compression streams,
