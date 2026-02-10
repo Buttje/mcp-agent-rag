@@ -305,6 +305,8 @@ def main():
         query_tool = create_mcp_tool_query_data(mcp_client)
 
         # Get the generative model from config
+        # The config stores the Ollama model name (e.g., "mistral:7b-instruct")
+        # We prefix it with "ollama:" to get the AGNO format (e.g., "ollama:mistral:7b-instruct")
         generative_model = config.get("generative_model", "mistral:7b-instruct")
         
         # Initialize AGNO agent with Ollama model
