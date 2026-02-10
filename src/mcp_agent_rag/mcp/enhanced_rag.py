@@ -564,15 +564,37 @@ Your task is to help answer the user's question by querying the appropriate data
 Instructions:
 1. Analyze the user's question carefully
 2. Use the available database query tools to retrieve relevant information
-3. After receiving results, evaluate if you have enough information or if there are gaps
-4. If there are information gaps, generate additional queries to fill those gaps
+3. After receiving results, evaluate if you have enough information to answer the question
+4. If there are gaps in the information or the answer is incomplete, generate additional queries
 5. Continue until you have sufficient information or determine that the information cannot be found
 
 Available databases and their tools:
 {json.dumps(tool_descriptions, indent=2)}
 
-When you have gathered sufficient information (confidence >= {self.iteration_confidence_threshold * 100}%), respond with your analysis.
-If you need more information (inference probability >= {self.query_inference_threshold * 100}%), use the query tools."""
+When you have gathered enough information to provide a complete answer, respond with your analysis.
+If you need more information to fully answer the question, use the query tools."""
+
+    def _format_retrieved_item(self, item: Dict) -> str:
+        """Format a retrieved data item for context display.
+        
+        Args:
+            item: Retrieved data item with 'database' and 'text' keys
+            
+        Returns:
+            Formatted string for display
+        """
+        text = item['text']
+        database = item['database']
+        
+        if len(text) > self.MAX_CONTEXT_PREVIEW_LENGTH:
+            # Truncate at word boundary
+            truncated = text[:self.MAX_CONTEXT_PREVIEW_LENGTH]
+            last_space = truncated.rfind(' ')
+            if last_space > 0:
+                truncated = truncated[:last_space]
+            return f"From {database}: {truncated}..."
+        else:
+            return f"From {database}: {text}"
 
     def get_context_with_llm(self, prompt: str, max_results: int = 5) -> Dict:
         """Get context using LLM-based agentic RAG flow.
@@ -627,12 +649,12 @@ If you need more information (inference probability >= {self.query_inference_thr
             # Build context from previous retrievals
             context = ""
             if all_retrieved_data:
-                context = "Previously retrieved information:\n" + "\n\n".join(
-                    [f"From {item['database']}: {item['text'][:self.MAX_CONTEXT_PREVIEW_LENGTH]}..." 
-                     if len(item['text']) > self.MAX_CONTEXT_PREVIEW_LENGTH
-                     else f"From {item['database']}: {item['text']}" 
-                     for item in all_retrieved_data[:5]]  # Limit context to avoid token overflow
-                )
+                # Format retrieved items with proper truncation
+                formatted_items = [
+                    self._format_retrieved_item(item) 
+                    for item in all_retrieved_data[:5]  # Limit to 5 most recent items
+                ]
+                context = "Previously retrieved information:\n" + "\n\n".join(formatted_items)
             
             # Call LLM with tools
             response = self.generator.generate_with_tools(
@@ -693,8 +715,8 @@ If you need more information (inference probability >= {self.query_inference_thr
 2. Are there any information gaps that need to be filled?
 3. What additional queries (if any) should we make?
 
-Respond with additional queries if needed (inference probability >= {self.query_inference_threshold * 100}%), 
-or indicate that the information is sufficient (confidence >= {self.iteration_confidence_threshold * 100}%)."""
+If the information is complete and you can answer the question, stop querying.
+If there are gaps or you need more specific information, use the query tools to retrieve it."""
         
         # Build final context
         context_parts = []
@@ -727,15 +749,22 @@ or indicate that the information is sufficient (confidence >= {self.iteration_co
         
         # Ask LLM to create prompt augmentation
         if final_context:
+            # Truncate context at word boundary for augmentation
+            truncated_context = final_context[:self.MAX_AUGMENTATION_CONTEXT_LENGTH]
+            if len(final_context) > self.MAX_AUGMENTATION_CONTEXT_LENGTH:
+                last_space = truncated_context.rfind(' ')
+                if last_space > 0:
+                    truncated_context = truncated_context[:last_space]
+            
             augmentation_prompt = f"""Based on the following retrieved information, create a high-quality prompt augmentation 
 that enriches the original user prompt with relevant context. 
 
 Original prompt: {prompt}
 
 Retrieved information:
-{final_context[:self.MAX_AUGMENTATION_CONTEXT_LENGTH]}  
+{truncated_context}
 
-Create a concise augmentation (inference threshold: {self.final_augmentation_threshold * 100}%) that helps answer the question."""
+Create a concise, well-supported augmentation that helps answer the question."""
             
             augmentation = self.generator.generate(augmentation_prompt, "")
             if augmentation:
