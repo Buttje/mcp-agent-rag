@@ -180,6 +180,10 @@ class AgenticRAG:
     The agent prioritizes RAG database retrieval and discards low-confidence
     results (below 85% confidence threshold).
     """
+    
+    # Constants for text length limits
+    MAX_CONTEXT_PREVIEW_LENGTH = 500  # Max length for context preview in iterations
+    MAX_AUGMENTATION_CONTEXT_LENGTH = 2000  # Max context length for final augmentation
 
     def __init__(
         self,
@@ -540,6 +544,36 @@ class AgenticRAG:
             logger.error(f"Error executing query: {e}")
             return {"error": str(e)}
 
+    def _build_system_prompt(self, tools: List[Dict]) -> str:
+        """Build system prompt for LLM with tool descriptions.
+        
+        Args:
+            tools: List of tool definitions
+            
+        Returns:
+            System prompt string
+        """
+        tool_descriptions = [
+            {'name': tool['function']['name'], 'description': tool['function']['description']} 
+            for tool in tools
+        ]
+        
+        return f"""You are a helpful AI assistant with access to multiple knowledge databases. 
+Your task is to help answer the user's question by querying the appropriate databases.
+
+Instructions:
+1. Analyze the user's question carefully
+2. Use the available database query tools to retrieve relevant information
+3. After receiving results, evaluate if you have enough information or if there are gaps
+4. If there are information gaps, generate additional queries to fill those gaps
+5. Continue until you have sufficient information or determine that the information cannot be found
+
+Available databases and their tools:
+{json.dumps(tool_descriptions, indent=2)}
+
+When you have gathered sufficient information (confidence >= {self.iteration_confidence_threshold * 100}%), respond with your analysis.
+If you need more information (inference probability >= {self.query_inference_threshold * 100}%), use the query tools."""
+
     def get_context_with_llm(self, prompt: str, max_results: int = 5) -> Dict:
         """Get context using LLM-based agentic RAG flow.
         
@@ -573,22 +607,8 @@ class AgenticRAG:
                 "iterations": 0,
             }
         
-        # System prompt for the LLM
-        system_prompt = f"""You are a helpful AI assistant with access to multiple knowledge databases. 
-Your task is to help answer the user's question by querying the appropriate databases.
-
-Instructions:
-1. Analyze the user's question carefully
-2. Use the available database query tools to retrieve relevant information
-3. After receiving results, evaluate if you have enough information or if there are gaps
-4. If there are information gaps, generate additional queries to fill those gaps
-5. Continue until you have sufficient information or determine that the information cannot be found
-
-Available databases and their tools:
-{json.dumps([{'name': tool['function']['name'], 'description': tool['function']['description']} for tool in tools], indent=2)}
-
-When you have gathered sufficient information (confidence >= {self.iteration_confidence_threshold * 100}%), respond with your analysis.
-If you need more information (inference probability >= {self.query_inference_threshold * 100}%), use the query tools."""
+        # Build system prompt
+        system_prompt = self._build_system_prompt(tools)
 
         # Track all retrieved information
         all_retrieved_data = []
@@ -608,7 +628,8 @@ If you need more information (inference probability >= {self.query_inference_thr
             context = ""
             if all_retrieved_data:
                 context = "Previously retrieved information:\n" + "\n\n".join(
-                    [f"From {item['database']}: {item['text'][:500]}..." if len(item['text']) > 500 
+                    [f"From {item['database']}: {item['text'][:self.MAX_CONTEXT_PREVIEW_LENGTH]}..." 
+                     if len(item['text']) > self.MAX_CONTEXT_PREVIEW_LENGTH
                      else f"From {item['database']}: {item['text']}" 
                      for item in all_retrieved_data[:5]]  # Limit context to avoid token overflow
                 )
@@ -712,7 +733,7 @@ that enriches the original user prompt with relevant context.
 Original prompt: {prompt}
 
 Retrieved information:
-{final_context[:2000]}  
+{final_context[:self.MAX_AUGMENTATION_CONTEXT_LENGTH]}  
 
 Create a concise augmentation (inference threshold: {self.final_augmentation_threshold * 100}%) that helps answer the question."""
             
