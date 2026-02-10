@@ -101,3 +101,51 @@ def check_ollama_connection(host: str, timeout: int = 5) -> Tuple[bool, str]:
         return False, f"Cannot connect to {host}. Is Ollama running?"
     except Exception as e:
         return False, f"Error: {str(e)}"
+
+
+def get_model_capabilities(model_name: str, host: str = "http://localhost:11434", 
+                          timeout: int = 10) -> Tuple[List[str], str]:
+    """Fetch model capabilities from Ollama server.
+    
+    Args:
+        model_name: Name of the model (e.g., "qwen3:30b", "mistral:7b-instruct")
+        host: Ollama host URL
+        timeout: Request timeout in seconds
+        
+    Returns:
+        Tuple of (capabilities_list, error_message)
+        If successful, capabilities is a list like ["completion", "tools", "thinking"]
+        and error_message is empty. If failed, capabilities is empty.
+    """
+    try:
+        normalized_host = normalize_ollama_host(host)
+        
+        # Use POST request with JSON body as per Ollama API specification
+        response = requests.post(
+            f"{normalized_host}/api/show",
+            json={"name": model_name},
+            timeout=timeout
+        )
+        
+        if response.status_code != 200:
+            return [], f"Failed to get model info: HTTP {response.status_code}"
+        
+        data = response.json()
+        
+        # Extract capabilities from model info
+        # The capabilities are in the "details" -> "capabilities" field
+        capabilities = []
+        if "details" in data and isinstance(data["details"], dict):
+            if "capabilities" in data["details"]:
+                caps = data["details"]["capabilities"]
+                if isinstance(caps, list):
+                    capabilities = caps
+        
+        return capabilities, ""
+        
+    except requests.exceptions.Timeout:
+        return [], f"Connection timeout to {host}"
+    except requests.exceptions.ConnectionError:
+        return [], f"Cannot connect to {host}. Is Ollama running?"
+    except Exception as e:
+        return [], f"Error fetching model capabilities: {str(e)}"
