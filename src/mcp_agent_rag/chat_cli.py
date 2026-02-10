@@ -16,15 +16,17 @@ from mcp_agent_rag.utils import get_logger, setup_logger
 class MCPClient:
     """Client to communicate with MCP server via JSON-RPC."""
 
-    def __init__(self, process: subprocess.Popen):
+    def __init__(self, process: subprocess.Popen, verbose: bool = False):
         """Initialize MCP client with process.
 
         Args:
             process: The MCP server subprocess
+            verbose: Enable verbose output for debugging
         """
         self.process = process
         self.request_id = 0
         self.logger = get_logger(__name__)
+        self.verbose = verbose
 
     def call_tool(self, tool_name: str, arguments: dict[str, Any]) -> dict[str, Any]:
         """Call a tool on the MCP server.
@@ -44,6 +46,11 @@ class MCPClient:
             "params": {"name": tool_name, "arguments": arguments},
         }
 
+        if self.verbose:
+            print(f"\n🔧 [MCP Tool Call]")
+            print(f"   Tool: {tool_name}")
+            print(f"   Arguments: {arguments}")
+
         try:
             # Send request with explicit UTF-8 encoding
             request_json = json.dumps(request) + "\n"
@@ -60,9 +67,28 @@ class MCPClient:
 
             if "error" in response:
                 error = response["error"]
-                raise RuntimeError(f"MCP error: {error.get('message', 'Unknown error')}")
+                error_msg = f"MCP error: {error.get('message', 'Unknown error')}"
+                if self.verbose:
+                    print(f"   ❌ Error: {error_msg}")
+                raise RuntimeError(error_msg)
 
-            return response.get("result", {})
+            result = response.get("result", {})
+
+            if self.verbose:
+                # Show a summary of the result
+                if "context" in result:
+                    context = result["context"]
+                    context_len = len(context)
+                    context_preview = context[:150] + "..." if context_len > 150 else context
+                    print(f"   ✅ Result: Retrieved context ({context_len} chars)")
+                    print(f"   Preview: {context_preview}")
+                    if "citations" in result:
+                        print(f"   Citations: {len(result.get('citations', []))} sources")
+                else:
+                    print(f"   ✅ Result: {result}")
+                print()
+
+            return result
 
         except Exception as e:
             self.logger.error(f"Error calling MCP tool '{tool_name}': {e}")
@@ -133,11 +159,12 @@ def start_mcp_server(config: Config, active_databases: list[str]) -> subprocess.
         raise
 
 
-def create_mcp_tool_query_data(mcp_client: MCPClient):
+def create_mcp_tool_query_data(mcp_client: MCPClient, verbose: bool = False):
     """Create a tool function for querying data from MCP server.
 
     Args:
         mcp_client: The MCP client instance
+        verbose: Enable verbose output
 
     Returns:
         Tool function that can be used by AGNO agent
@@ -153,6 +180,12 @@ def create_mcp_tool_query_data(mcp_client: MCPClient):
         Returns:
             Context text with citations
         """
+        if verbose:
+            print(f"\n💭 [Agent Decision: Using query_data tool]")
+            print(f"   Reason: Need to search document databases for information")
+            print(f"   Query: {prompt}")
+            print(f"   Max results: {max_results}")
+
         try:
             result = mcp_client.call_tool(
                 "query-get_data", {"prompt": prompt, "max_results": max_results}
@@ -193,6 +226,11 @@ def main():
         "--log",
         default=None,
         help="Path to log file (default: ~/.mcp-agent-rag/logs/mcp-rag-cli.log)",
+    )
+    parser.add_argument(
+        "--verbose",
+        action="store_true",
+        help="Enable verbose output showing thinking process and tool usage",
     )
     args = parser.parse_args()
 
@@ -289,7 +327,7 @@ def main():
     print("Starting MCP server...")
     try:
         mcp_process = start_mcp_server(config, selected_databases)
-        mcp_client = MCPClient(mcp_process)
+        mcp_client = MCPClient(mcp_process, verbose=args.verbose)
     except Exception as e:
         logger.error(f"Failed to start MCP server: {e}", exc_info=True)
         print(f"Error: Failed to start MCP server: {e}", file=sys.stderr)
@@ -302,19 +340,19 @@ def main():
     print("Initializing agent...")
     try:
         # Create MCP query tool
-        query_tool = create_mcp_tool_query_data(mcp_client)
+        query_tool = create_mcp_tool_query_data(mcp_client, verbose=args.verbose)
 
         # Get the generative model from config
         # The config stores the Ollama model name (e.g., "mistral:7b-instruct")
         # We prefix it with "ollama:" to get the AGNO format (e.g., "ollama:mistral:7b-instruct")
         generative_model = config.get("generative_model", "mistral:7b-instruct")
-        
+
         # Handle both cases: model with or without "ollama:" prefix
         if not generative_model.startswith("ollama:"):
             model_string = f"ollama:{generative_model}"
         else:
             model_string = generative_model
-        
+
         # Initialize AGNO agent with Ollama model
         agent = Agent(
             name="MCP-RAG Assistant",
@@ -330,10 +368,15 @@ def main():
             tools=[query_tool],
             markdown=True,
             reasoning=True,  # Enable ReAct (Reasoning and Act) mechanism
+            debug_mode=args.verbose,  # Enable debug mode for verbose output
+            show_tool_calls=args.verbose,  # Show tool calls in verbose mode
         )
 
         print("Agent initialized successfully!")
         print()
+        if args.verbose:
+            print("🔍 Verbose mode enabled - showing thinking process and tool usage")
+            print()
         print("Chat started! Type your questions below.")
         print("Commands: 'quit', 'exit', '/q' to exit")
         print("=" * 70)
@@ -364,19 +407,24 @@ def main():
 
                 # Process query with agent
                 print()
-                print("Assistant: ", end="", flush=True)
-                
+
                 # Use the agent to process the query with ReAct mechanism
                 try:
+                    if args.verbose:
+                        # In verbose mode, show the thinking process
+                        print("🤔 [Agent Thinking...]")
+                        print()
+
+                    print("Assistant: ", end="", flush=True)
                     response = agent.run(user_input)
-                    
+
                     # Print the agent's response
                     if hasattr(response, 'content'):
                         print(response.content)
                     else:
                         print(str(response))
                     print()
-                    
+
                 except Exception as e:
                     logger.error(f"Error running agent: {e}", exc_info=True)
                     print(f"\nError processing query: {e}", file=sys.stderr)

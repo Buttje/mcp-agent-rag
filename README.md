@@ -247,6 +247,10 @@ The **mcp-rag-cli.py** uses the AGNO agent framework and communicates with an MC
 python mcp-rag-cli.py
 ```
 
+**Options:**
+- `--log <path>`: Specify a custom log file path (default: `~/.mcp-agent-rag/logs/mcp-rag-cli.log`)
+- `--verbose`: Enable verbose output showing the agent's thinking process and tool usage
+
 The CLI client will:
 1. Display all available databases
 2. Let you select which database(s) to use (single, multiple, or all)
@@ -282,6 +286,38 @@ Sources:
 You: quit
 Goodbye!
 ```
+
+**Verbose Mode:**
+
+Enable verbose mode to see the agent's thinking process, tool decisions, and detailed output:
+
+```bash
+python mcp-rag-cli.py --verbose
+```
+
+In verbose mode, you'll see:
+- 🤔 Agent's reasoning and decision-making process
+- 💭 When and why the agent decides to use tools
+- 🔧 Detailed MCP tool calls with arguments
+- ✅ Tool execution results and summaries
+
+**Example with verbose output:**
+```
+You: What is Python used for?
+
+🤔 [Agent Thinking...]
+
+💭 [Agent Decision: Using query_data tool]
+   Reason: Need to search document databases for information
+   Query: What is Python used for?
+   Max results: 5
+
+🔧 [MCP Tool Call]
+   Tool: query-get_data
+   Arguments: {'prompt': 'What is Python used for?', 'max_results': 5}
+   ✅ Result: Retrieved context (1234 chars)
+   Preview: Python is a high-level programming language...
+   Citations: 3 sources
 
 ## MCP Protocol Support
 

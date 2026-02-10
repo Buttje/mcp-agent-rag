@@ -27,12 +27,44 @@ def test_mcp_client_call_tool():
         (json.dumps(response) + "\n").encode()
     )
 
-    client = MCPClient(mock_process)
+    client = MCPClient(mock_process, verbose=False)
 
     result = client.call_tool("query-get_data", {"prompt": "test"})
 
     assert result["context"] == "test context"
     assert result["citations"] == []
+
+
+def test_mcp_client_call_tool_verbose(capsys):
+    """Test MCP client tool calling with verbose mode."""
+    # Create a mock process
+    mock_process = Mock()
+    mock_process.stdin = Mock()
+    mock_process.stdout = Mock()
+    mock_process.poll.return_value = None
+
+    # Mock the response
+    response = {
+        "jsonrpc": "2.0",
+        "id": 1,
+        "result": {"context": "test context", "citations": [{"source": "test.txt"}]},
+    }
+    mock_process.stdout.readline.return_value = (
+        (json.dumps(response) + "\n").encode()
+    )
+
+    client = MCPClient(mock_process, verbose=True)
+
+    result = client.call_tool("query-get_data", {"prompt": "test"})
+
+    assert result["context"] == "test context"
+    assert result["citations"] == [{"source": "test.txt"}]
+
+    # Check verbose output
+    captured = capsys.readouterr()
+    assert "🔧 [MCP Tool Call]" in captured.out
+    assert "Tool: query-get_data" in captured.out
+    assert "✅ Result:" in captured.out
 
 
 def test_mcp_client_error_response():
@@ -78,13 +110,38 @@ def test_create_mcp_tool_query_data():
         "citations": [{"source": "test.txt", "chunk": 0}],
     }
 
-    tool = create_mcp_tool_query_data(mock_client)
+    tool = create_mcp_tool_query_data(mock_client, verbose=False)
     result = tool("test prompt")
 
     assert "Test context" in result
     assert "test.txt" in result
     mock_client.call_tool.assert_called_once_with(
         "query-get_data", {"prompt": "test prompt", "max_results": 5}
+    )
+
+
+def test_create_mcp_tool_query_data_verbose(capsys):
+    """Test creating MCP query tool with verbose mode."""
+    mock_client = Mock()
+    mock_client.call_tool.return_value = {
+        "context": "Test context",
+        "citations": [{"source": "test.txt", "chunk": 0}],
+    }
+
+    tool = create_mcp_tool_query_data(mock_client, verbose=True)
+    result = tool("test prompt", max_results=3)
+
+    assert "Test context" in result
+    assert "test.txt" in result
+
+    # Check verbose output
+    captured = capsys.readouterr()
+    assert "💭 [Agent Decision: Using query_data tool]" in captured.out
+    assert "Query: test prompt" in captured.out
+    assert "Max results: 3" in captured.out
+
+    mock_client.call_tool.assert_called_once_with(
+        "query-get_data", {"prompt": "test prompt", "max_results": 3}
     )
 
 
@@ -213,3 +270,39 @@ def test_chat_cli_main_with_default_log_file(test_config):
                 mock_setup_logger.assert_called_once()
                 call_args = mock_setup_logger.call_args
                 assert "mcp-rag-cli.log" in call_args[1]["log_file"]
+
+
+def test_chat_cli_main_with_verbose_flag(test_config, capsys):
+    """Test chat CLI main with --verbose flag."""
+    test_args = ["mcp-rag-cli", "--verbose"]
+
+    with patch.object(sys, "argv", test_args):
+        with patch("mcp_agent_rag.chat_cli.setup_logger"):
+            with patch("mcp_agent_rag.chat_cli.DatabaseManager") as MockDBManager:
+                # Mock database manager to return a test database
+                mock_db_manager = Mock()
+                test_db_info = {"test_db": {"doc_count": 5, "description": "Test DB"}}
+                mock_db_manager.list_databases.return_value = test_db_info
+                MockDBManager.return_value = mock_db_manager
+
+                # Mock start_mcp_server to avoid starting actual server
+                with patch("mcp_agent_rag.chat_cli.start_mcp_server") as mock_start_server:
+                    mock_process = Mock()
+                    mock_start_server.return_value = mock_process
+
+                    # Mock Agent to avoid needing Ollama
+                    with patch("mcp_agent_rag.chat_cli.Agent") as MockAgent:
+                        # Simulate user selecting database and then quitting
+                        with patch("builtins.input", side_effect=["1", "quit"]):
+                            main()
+
+                            # Verify MCPClient was created with verbose=True
+                            # by checking the output contains verbose mode message
+                            captured = capsys.readouterr()
+                            assert "🔍 Verbose mode enabled" in captured.out
+
+                            # Verify Agent was created with debug_mode and show_tool_calls
+                            MockAgent.assert_called_once()
+                            call_kwargs = MockAgent.call_args[1]
+                            assert call_kwargs.get("debug_mode") is True
+                            assert call_kwargs.get("show_tool_calls") is True
