@@ -565,3 +565,184 @@ class TestToolsIntegration:
             
             # Specific search should have only one database
             assert response_specific["result"]["database"] == "db1"
+
+
+class TestConfidenceScores:
+    """Tests for confidence scores in responses."""
+
+    def test_get_information_for_includes_confidence(self, multi_db_server):
+        """Test that getInformationFor includes confidence scores."""
+        with patch.object(multi_db_server.agent.embedder, "embed_single") as mock_embed:
+            mock_embed.return_value = [0.15] * 768
+
+            request = {
+                "jsonrpc": "2.0",
+                "id": 1,
+                "method": "getInformationFor",
+                "params": {"prompt": "What is Python?"},
+            }
+
+            response = multi_db_server.handle_request(request)
+            
+            assert response["id"] == 1
+            assert "result" in response
+            result = response["result"]
+            
+            # Check confidence fields are present
+            assert "average_confidence" in result
+            assert "min_confidence_threshold" in result
+            
+            # Check confidence is a valid number
+            assert isinstance(result["average_confidence"], (int, float))
+            assert 0 <= result["average_confidence"] <= 1
+            
+            # Check threshold is set correctly (default 0.85)
+            assert result["min_confidence_threshold"] == 0.85
+            
+            # Check citations include confidence scores
+            if result["citations"]:
+                for citation in result["citations"]:
+                    assert "confidence" in citation
+                    assert isinstance(citation["confidence"], (int, float))
+                    # All results should meet the threshold
+                    assert citation["confidence"] >= 0.85
+
+    def test_get_information_for_db_includes_confidence(self, multi_db_server):
+        """Test that getInformationForDB includes confidence scores."""
+        with patch.object(multi_db_server.agent.embedder, "embed_single") as mock_embed:
+            mock_embed.return_value = [0.15] * 768
+
+            request = {
+                "jsonrpc": "2.0",
+                "id": 2,
+                "method": "getInformationForDB",
+                "params": {
+                    "prompt": "What is Python?",
+                    "database_name": "db1",
+                },
+            }
+
+            response = multi_db_server.handle_request(request)
+            
+            assert response["id"] == 2
+            assert "result" in response
+            result = response["result"]
+            
+            # Check confidence fields are present
+            assert "average_confidence" in result
+            assert "min_confidence_threshold" in result
+            
+            # Check confidence is a valid number
+            assert isinstance(result["average_confidence"], (int, float))
+            assert 0 <= result["average_confidence"] <= 1
+            
+            # Check citations include confidence scores
+            if result["citations"]:
+                for citation in result["citations"]:
+                    assert "confidence" in citation
+                    assert isinstance(citation["confidence"], (int, float))
+                    # All results should meet the threshold
+                    assert citation["confidence"] >= 0.85
+
+    def test_tools_call_response_format(self, multi_db_server):
+        """Test that tools/call returns proper MCP-compliant JSON format."""
+        with patch.object(multi_db_server.agent.embedder, "embed_single") as mock_embed:
+            mock_embed.return_value = [0.15] * 768
+
+            request = {
+                "jsonrpc": "2.0",
+                "id": 3,
+                "method": "tools/call",
+                "params": {
+                    "name": "getInformationFor",
+                    "arguments": {"prompt": "test query"},
+                },
+            }
+
+            response = multi_db_server.handle_request(request)
+            
+            assert response["id"] == 3
+            assert "result" in response
+            
+            # Check MCP-compliant format
+            result = response["result"]
+            assert "content" in result
+            assert isinstance(result["content"], list)
+            assert len(result["content"]) > 0
+            
+            # Check content structure
+            content_item = result["content"][0]
+            assert content_item["type"] == "text"
+            assert "text" in content_item
+            
+            # Check isError flag
+            assert "isError" in result
+            assert result["isError"] is False
+            
+            # Parse JSON content and verify structure
+            data = json.loads(content_item["text"])
+            assert "average_confidence" in data
+            assert "min_confidence_threshold" in data
+
+    def test_tools_call_error_format(self, multi_db_server):
+        """Test that tools/call errors are returned as JSON objects."""
+        request = {
+            "jsonrpc": "2.0",
+            "id": 4,
+            "method": "tools/call",
+            "params": {
+                "name": "getInformationFor",
+                "arguments": {},  # Missing required 'prompt'
+            },
+        }
+
+        response = multi_db_server.handle_request(request)
+        
+        assert response["id"] == 4
+        assert "result" in response
+        result = response["result"]
+        
+        # Check error format
+        assert "isError" in result
+        assert result["isError"] is True
+        
+        # Check content contains JSON-formatted error
+        assert "content" in result
+        content_item = result["content"][0]
+        assert content_item["type"] == "text"
+        
+        # Parse error as JSON
+        error_data = json.loads(content_item["text"])
+        assert "error" in error_data
+        assert "tool" in error_data
+        assert "arguments" in error_data
+
+    def test_tool_descriptions_include_confidence_info(self, multi_db_server):
+        """Test that tool descriptions mention confidence thresholds."""
+        request = {
+            "jsonrpc": "2.0",
+            "id": 5,
+            "method": "tools/list",
+            "params": {},
+        }
+
+        response = multi_db_server.handle_request(request)
+        
+        assert "result" in response
+        tools = response["result"]["tools"]
+        
+        # Check getInformationFor description mentions confidence
+        info_tool = next(t for t in tools if t["name"] == "getInformationFor")
+        desc_lower = info_tool["description"].lower()
+        assert "confidence" in desc_lower, "Tool description should mention confidence"
+        # Check for threshold value (could be 85%, 0.85, or eighty-five)
+        assert any(thresh in info_tool["description"] for thresh in ["85%", "0.85", ">85"]), \
+            "Tool description should mention 85% threshold"
+        
+        # Check getInformationForDB description mentions confidence
+        info_db_tool = next(t for t in tools if t["name"] == "getInformationForDB")
+        desc_lower = info_db_tool["description"].lower()
+        assert "confidence" in desc_lower, "Tool description should mention confidence"
+        # Check for threshold value
+        assert any(thresh in info_db_tool["description"] for thresh in ["85%", "0.85", ">85"]), \
+            "Tool description should mention 85% threshold"

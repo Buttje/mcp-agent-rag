@@ -311,7 +311,7 @@ class MCPServer:
             params: Dictionary with 'prompt' parameter
             
         Returns:
-            Dictionary with context, citations, and databases searched
+            Dictionary with context, citations, databases searched, and confidence scores
         """
         prompt = params.get("prompt")
         if not prompt:
@@ -327,6 +327,8 @@ class MCPServer:
             "context": context["text"],
             "citations": context["citations"],
             "databases_searched": context["databases_searched"],
+            "average_confidence": context.get("average_confidence", 0.0),
+            "min_confidence_threshold": self.agent.min_confidence,
         }
 
     def _get_information_for_db(self, params: Dict) -> Dict:
@@ -336,7 +338,7 @@ class MCPServer:
             params: Dictionary with 'prompt' and 'database_name' parameters
             
         Returns:
-            Dictionary with context, citations, and database searched
+            Dictionary with context, citations, database searched, and confidence scores
         """
         prompt = params.get("prompt")
         database_name = params.get("database_name")
@@ -361,6 +363,9 @@ class MCPServer:
         
         db = self.loaded_databases[database_name]
         
+        # Get minimum confidence threshold from agent
+        min_confidence = self.agent.min_confidence
+        
         # Generate query embedding
         query_embedding = self.agent.embedder.embed_single(prompt)
         if not query_embedding:
@@ -370,19 +375,34 @@ class MCPServer:
                 "database": database_name,
                 "context": "",
                 "citations": [],
+                "average_confidence": 0.0,
+                "min_confidence_threshold": min_confidence,
             }
         
         # Search the specific database
         results = db.search(query_embedding, k=max_results)
         
-        # Process results
+        # Process results with confidence filtering
         context_parts = []
         citations = []
         seen_sources = set()
         total_length = 0
         max_context_length = self.config.get("max_context_length", 4000)
+        confidence_sum = 0.0
+        confidence_count = 0
         
         for distance, metadata in results:
+            # Convert distance to confidence score
+            confidence = 1.0 / (1.0 + distance)
+            
+            # Filter by minimum confidence threshold
+            if confidence < min_confidence:
+                logger.debug(
+                    f"Discarding result with confidence {confidence:.2f} "
+                    f"< threshold {min_confidence:.2f}"
+                )
+                continue
+            
             source = metadata.get("source", "")
             chunk_num = metadata.get("chunk_num", 0)
             source_key = f"{source}:{chunk_num}"
@@ -404,18 +424,24 @@ class MCPServer:
                 "source": source,
                 "chunk": chunk_num,
                 "database": database_name,
+                "confidence": confidence,
             })
             seen_sources.add(source_key)
             total_length += len(chunk_text)
+            confidence_sum += confidence
+            confidence_count += 1
         
         # Compose final context
         context_text = "\n\n".join(context_parts)
+        average_confidence = confidence_sum / confidence_count if confidence_count > 0 else 0.0
         
         return {
             "prompt": prompt,
             "database": database_name,
             "context": context_text,
             "citations": citations,
+            "average_confidence": average_confidence,
+            "min_confidence_threshold": min_confidence,
         }
 
     def _list_resources(self, params: Dict) -> Dict:
@@ -539,12 +565,47 @@ class MCPServer:
 
 
     def _list_tools(self, params: Dict) -> Dict:
-        """Handle tools/list."""
-        # Define base tools without prefix
+        """Handle tools/list - dynamically generates tool descriptions based on active databases.
+        
+        Tool descriptions are optimized based on database metadata including
+        prefix, description, and document types.
+        """
+        # Collect database information for tool descriptions
+        db_descriptions = []
+        db_names = []
+        for db_name in self.active_databases:
+            db_info = self.config.get_database(db_name)
+            if db_info:
+                desc = db_info.get("description", "")
+                prefix = db_info.get("prefix", "")
+                doc_count = db_info.get("doc_count", 0)
+                
+                # Format prefix display
+                prefix_display = prefix if prefix else "no prefix"
+                
+                # Build a descriptive string
+                if desc and doc_count:
+                    db_descriptions.append(f"{db_name} ({prefix_display}): {desc} - {doc_count} documents")
+                elif desc:
+                    db_descriptions.append(f"{db_name} ({prefix_display}): {desc}")
+                else:
+                    db_descriptions.append(f"{db_name} ({prefix_display})")
+                
+                db_names.append(db_name)
+        
+        # Create detailed database list for descriptions
+        db_list_text = "\n".join([f"  - {desc}" for desc in db_descriptions]) if db_descriptions else "  (no databases)"
+        db_names_text = ", ".join(db_names) if db_names else "none"
+        
+        # Define base tools with dynamic descriptions
         base_tools = [
             {
                 "name": "getDatabases",
-                "description": "Get list of activated databases in the MCP RAG server",
+                "description": (
+                    f"Get list of activated databases in the MCP RAG server. "
+                    f"Currently active: {db_names_text}. "
+                    f"Returns database names, descriptions, document counts, and metadata."
+                ),
                 "inputSchema": {
                     "type": "object",
                     "properties": {},
@@ -552,18 +613,23 @@ class MCPServer:
             },
             {
                 "name": "getInformationFor",
-                "description": "Returns information by scanning through all activated databases",
+                "description": (
+                    f"Returns information by scanning through all activated RAG databases "
+                    f"using vector similarity search. Retrieves context from high-confidence matches "
+                    f"(>85% confidence threshold). Results include citations with confidence scores. "
+                    f"\n\nActive databases:\n{db_list_text}"
+                ),
                 "inputSchema": {
                     "type": "object",
                     "properties": {
                         "prompt": {
                             "type": "string", 
-                            "description": "The query/prompt to search for"
+                            "description": "The query/prompt to search for in all databases"
                         },
                         "max_results": {
                             "type": "integer", 
                             "default": 5,
-                            "description": "Maximum number of results per database"
+                            "description": "Maximum number of results per database (default: 5)"
                         },
                     },
                     "required": ["prompt"],
@@ -571,22 +637,27 @@ class MCPServer:
             },
             {
                 "name": "getInformationForDB",
-                "description": "Returns information by scanning just the named database",
+                "description": (
+                    f"Returns information by scanning just the named database using vector similarity search. "
+                    f"Retrieves context from high-confidence matches (>85% confidence threshold). "
+                    f"Results include citations with confidence scores. "
+                    f"\n\nAvailable databases:\n{db_list_text}"
+                ),
                 "inputSchema": {
                     "type": "object",
                     "properties": {
                         "prompt": {
                             "type": "string",
-                            "description": "The query/prompt to search for"
+                            "description": "The query/prompt to search for in the specified database"
                         },
                         "database_name": {
                             "type": "string",
-                            "description": "Name of the database to search in"
+                            "description": f"Name of the database to search in. Available: {db_names_text}"
                         },
                         "max_results": {
                             "type": "integer",
                             "default": 5,
-                            "description": "Maximum number of results"
+                            "description": "Maximum number of results (default: 5)"
                         },
                     },
                     "required": ["prompt", "database_name"],
@@ -611,6 +682,8 @@ class MCPServer:
             "content": [{"type": "text", "text": "<json_string>"}],
             "isError": false
         }
+        
+        All responses are JSON-formatted, including errors.
         """
         name = params.get("name")
         arguments = params.get("arguments", {})
@@ -631,7 +704,7 @@ class MCPServer:
             else:
                 raise ValueError(f"Unknown tool: {name}")
             
-            # Wrap result in MCP-compliant format
+            # Wrap result in MCP-compliant format with JSON serialization
             return {
                 "content": [
                     {
@@ -642,12 +715,17 @@ class MCPServer:
                 "isError": False
             }
         except Exception as e:
-            # Return error in MCP-compliant format
+            # Return error in MCP-compliant format as JSON
+            error_result = {
+                "error": str(e),
+                "tool": name,
+                "arguments": arguments,
+            }
             return {
                 "content": [
                     {
                         "type": "text",
-                        "text": f"Error: {str(e)}"
+                        "text": json.dumps(error_result)
                     }
                 ],
                 "isError": True

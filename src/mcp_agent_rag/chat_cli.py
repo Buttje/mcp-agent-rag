@@ -15,6 +15,81 @@ from mcp_agent_rag.utils import get_logger, setup_logger
 from mcp_agent_rag.utils.agno_ollama_patch import apply_agno_ollama_patch
 
 
+# ANSI color codes for terminal output
+class Colors:
+    """ANSI color codes for terminal output."""
+    RESET = "\033[0m"
+    BOLD = "\033[1m"
+    
+    # Text colors
+    RED = "\033[91m"
+    GREEN = "\033[92m"
+    YELLOW = "\033[93m"
+    BLUE = "\033[94m"
+    MAGENTA = "\033[95m"
+    CYAN = "\033[96m"
+    WHITE = "\033[97m"
+    GRAY = "\033[90m"
+    
+    # Background colors
+    BG_RED = "\033[101m"
+    BG_GREEN = "\033[102m"
+    BG_YELLOW = "\033[103m"
+
+
+# Confidence thresholds for color coding
+CONFIDENCE_HIGH = 0.95  # Green
+CONFIDENCE_GOOD = 0.90  # Cyan
+CONFIDENCE_MIN = 0.85   # Yellow (matches filtering threshold)
+
+
+def format_confidence(confidence: float) -> str:
+    """Format confidence score with color coding.
+    
+    Args:
+        confidence: Confidence score (0-1)
+    
+    Returns:
+        Color-coded confidence string
+    """
+    percentage = confidence * 100
+    if confidence >= CONFIDENCE_HIGH:
+        color = Colors.GREEN
+    elif confidence >= CONFIDENCE_GOOD:
+        color = Colors.CYAN
+    elif confidence >= CONFIDENCE_MIN:
+        color = Colors.YELLOW
+    else:
+        color = Colors.RED
+    
+    return f"{color}{percentage:.1f}%{Colors.RESET}"
+
+
+def print_citations(citations: list, show_confidence: bool = True):
+    """Print citations with color coding.
+    
+    Args:
+        citations: List of citation dictionaries
+        show_confidence: Whether to show confidence scores
+    """
+    if not citations:
+        return
+    
+    print(f"\n{Colors.BOLD}{Colors.CYAN}📚 Sources:{Colors.RESET}")
+    for i, citation in enumerate(citations, 1):
+        source = citation.get("source", "Unknown")
+        chunk = citation.get("chunk", "?")
+        database = citation.get("database", "Unknown")
+        confidence = citation.get("confidence")
+        
+        conf_str = ""
+        if show_confidence and confidence is not None:
+            conf_str = f" {Colors.GRAY}[Confidence: {format_confidence(confidence)}]{Colors.RESET}"
+        
+        print(f"  {Colors.BOLD}{i}.{Colors.RESET} {source} (chunk {chunk}) "
+              f"{Colors.GRAY}from {database}{Colors.RESET}{conf_str}")
+
+
 class MCPClient:
     """Client to communicate with MCP server via JSON-RPC."""
 
@@ -49,9 +124,9 @@ class MCPClient:
         }
 
         if self.verbose:
-            print(f"\n🔧 [MCP Tool Call]")
-            print(f"   Tool: {tool_name}")
-            print(f"   Arguments: {arguments}")
+            print(f"\n{Colors.BOLD}{Colors.BLUE}🔧 [MCP Tool Call]{Colors.RESET}")
+            print(f"   Tool: {Colors.CYAN}{tool_name}{Colors.RESET}")
+            print(f"   Arguments: {Colors.GRAY}{arguments}{Colors.RESET}")
 
         try:
             # Send request with explicit UTF-8 encoding
@@ -71,23 +146,59 @@ class MCPClient:
                 error = response["error"]
                 error_msg = f"MCP error: {error.get('message', 'Unknown error')}"
                 if self.verbose:
-                    print(f"   ❌ Error: {error_msg}")
+                    print(f"   {Colors.RED}❌ Error: {error_msg}{Colors.RESET}")
                 raise RuntimeError(error_msg)
 
             result = response.get("result", {})
+            
+            # Parse JSON from MCP content array if present
+            if "content" in result and isinstance(result["content"], list):
+                for content_item in result["content"]:
+                    if content_item.get("type") == "text":
+                        text = content_item.get("text", "")
+                        try:
+                            # Try to parse as JSON
+                            parsed = json.loads(text)
+                            result = parsed
+                            break
+                        except json.JSONDecodeError:
+                            # Not JSON, use as-is
+                            result = {"text": text}
+                            break
 
             if self.verbose:
-                # Show a summary of the result
+                # Show a summary of the result with color coding
                 if "context" in result:
                     context = result["context"]
                     context_len = len(context)
                     context_preview = context[:150] + "..." if context_len > 150 else context
-                    print(f"   ✅ Result: Retrieved context ({context_len} chars)")
-                    print(f"   Preview: {context_preview}")
+                    
+                    avg_conf = result.get("average_confidence")
+                    conf_str = ""
+                    if avg_conf is not None:
+                        conf_str = f" {Colors.GRAY}[Avg confidence: {format_confidence(avg_conf)}]{Colors.RESET}"
+                    
+                    print(f"   {Colors.GREEN}✅ Result: Retrieved context ({context_len} chars){Colors.RESET}{conf_str}")
+                    print(f"   {Colors.GRAY}Preview: {context_preview}{Colors.RESET}")
+                    
                     if "citations" in result:
-                        print(f"   Citations: {len(result.get('citations', []))} sources")
+                        citations = result.get("citations", [])
+                        print(f"   {Colors.CYAN}Citations: {len(citations)} sources{Colors.RESET}")
+                        
+                        # Show citations with confidence
+                        if citations and self.verbose:
+                            print_citations(citations[:3])  # Show first 3
+                            if len(citations) > 3:
+                                print(f"   {Colors.GRAY}... and {len(citations) - 3} more{Colors.RESET}")
+                    
+                    min_threshold = result.get("min_confidence_threshold")
+                    if min_threshold is not None:
+                        print(f"   {Colors.GRAY}Minimum confidence threshold: {format_confidence(min_threshold)}{Colors.RESET}")
+                
+                elif "error" in result:
+                    print(f"   {Colors.RED}❌ Tool Error: {result['error']}{Colors.RESET}")
                 else:
-                    print(f"   ✅ Result: {result}")
+                    print(f"   {Colors.GREEN}✅ Result: {Colors.RESET}{result}")
                 print()
 
             return result
@@ -378,13 +489,32 @@ def main():
             model=model_string,
             description="An AI assistant that can query document databases via MCP server",
             instructions=[
-                "You are a helpful AI assistant with access to document databases.",
-                "When users ask questions, use the query_data tool to search relevant "
-                "information.",
-                "Provide clear, accurate answers based on the retrieved context.",
-                "Always cite your sources when providing information from the databases.",
-                "Think step by step about what information you need and how to answer "
-                "the question.",
+                "You are a helpful AI assistant with access to document databases via RAG (Retrieval Augmented Generation).",
+                "",
+                "CRITICAL INSTRUCTIONS - READ CAREFULLY:",
+                "1. ALWAYS prioritize information from the RAG database over your own knowledge.",
+                "2. DO NOT invent, fabricate, or assume any information not present in the retrieved context.",
+                "3. Only use information from sources with confidence scores >= 85%. Lower confidence results are unreliable and must be discarded.",
+                "4. The RAG system filters results by confidence automatically, so all returned results meet the 85% threshold.",
+                "5. If the retrieved context does not contain enough information to answer the question, say so explicitly.",
+                "6. Never supplement RAG data with your own inference or general knowledge unless explicitly requested.",
+                "",
+                "WORKFLOW:",
+                "1. For every user question, FIRST use the query_data tool to search the databases.",
+                "2. Carefully analyze the retrieved context and confidence scores.",
+                "3. Base your answer SOLELY on the retrieved information.",
+                "4. ALWAYS cite your sources with database names and confidence scores.",
+                "5. If no relevant information is found, respond: 'I could not find relevant information in the databases to answer this question.'",
+                "",
+                "CITATION FORMAT:",
+                "- Always mention source documents and their confidence levels",
+                "- Example: 'According to [document.pdf] (confidence: 92%), ...'",
+                "",
+                "WHAT NOT TO DO:",
+                "- Do not answer from memory if RAG returns no results",
+                "- Do not mix your knowledge with RAG data",
+                "- Do not use information below 85% confidence",
+                "- Do not make assumptions beyond what the context explicitly states",
             ],
             tools=[query_tool],
             markdown=True,

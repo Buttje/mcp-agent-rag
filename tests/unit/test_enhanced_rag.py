@@ -49,11 +49,19 @@ def test_enhanced_retrieval_init(mock_config, mock_databases):
     assert retrieval.config == mock_config
     assert retrieval.databases == mock_databases
     assert retrieval.max_context_length == 1000
+    assert retrieval.min_confidence == 0.85  # Default threshold
+
+
+def test_enhanced_retrieval_custom_confidence(mock_config, mock_databases):
+    """Test EnhancedRetrieval with custom confidence threshold."""
+    retrieval = EnhancedRetrieval(mock_config, mock_databases, min_confidence=0.90)
+    
+    assert retrieval.min_confidence == 0.90
 
 
 @patch("mcp_agent_rag.mcp.enhanced_rag.OllamaEmbedder")
 def test_enhanced_retrieval_get_context(mock_embedder_class, mock_config, mock_databases):
-    """Test EnhancedRetrieval context retrieval."""
+    """Test EnhancedRetrieval context retrieval with confidence scores."""
     # Mock embedder
     mock_embedder = MagicMock()
     mock_embedder.embed_single.return_value = [0.15] * 768
@@ -69,10 +77,42 @@ def test_enhanced_retrieval_get_context(mock_embedder_class, mock_config, mock_d
     assert "text" in result
     assert "citations" in result
     assert "databases_searched" in result
+    assert "average_confidence" in result
     assert "test_db" in result["databases_searched"]
+    
+    # Verify confidence scores in citations
+    if result["citations"]:
+        for citation in result["citations"]:
+            assert "confidence" in citation
+            assert 0 <= citation["confidence"] <= 1
     
     # Verify embedder was called
     mock_embedder.embed_single.assert_called_once_with("test query")
+
+
+@patch("mcp_agent_rag.mcp.enhanced_rag.OllamaEmbedder")
+def test_enhanced_retrieval_confidence_filtering(
+    mock_embedder_class, mock_config, mock_databases
+):
+    """Test that low-confidence results are filtered out."""
+    # Mock embedder
+    mock_embedder = MagicMock()
+    # Use a query embedding far from stored embeddings to get low confidence
+    mock_embedder.embed_single.return_value = [0.9] * 768
+    mock_embedder_class.return_value = mock_embedder
+    
+    # Use very high confidence threshold to ensure filtering
+    retrieval = EnhancedRetrieval(mock_config, mock_databases, min_confidence=0.99)
+    retrieval.embedder = mock_embedder
+    
+    result = retrieval.get_context("test query", max_results=5)
+    
+    # With such high threshold, we expect empty or very few results
+    # (depending on actual distances computed)
+    assert "citations" in result
+    # All returned citations should have confidence >= threshold
+    for citation in result["citations"]:
+        assert citation["confidence"] >= 0.99
 
 
 @patch("mcp_agent_rag.mcp.enhanced_rag.OllamaEmbedder")
@@ -90,19 +130,28 @@ def test_enhanced_retrieval_embedding_failure(
     
     result = retrieval.get_context("test query")
     
-    # Should return empty result
+    # Should return empty result with confidence info
     assert result["text"] == ""
     assert result["citations"] == []
     assert result["databases_searched"] == []
+    assert result["average_confidence"] == 0.0
 
 
 def test_agentic_rag_init(mock_config, mock_databases):
-    """Test AgenticRAG initialization."""
+    """Test AgenticRAG initialization with confidence threshold."""
     agentic = AgenticRAG(mock_config, mock_databases, max_iterations=2)
     
     assert agentic.config == mock_config
     assert agentic.databases == mock_databases
     assert agentic.max_iterations == 2
+    assert agentic.min_confidence == 0.85  # Default threshold
+
+
+def test_agentic_rag_custom_confidence(mock_config, mock_databases):
+    """Test AgenticRAG with custom confidence threshold."""
+    agentic = AgenticRAG(mock_config, mock_databases, min_confidence=0.90)
+    
+    assert agentic.min_confidence == 0.90
 
 
 @patch("mcp_agent_rag.mcp.enhanced_rag.OllamaEmbedder")
