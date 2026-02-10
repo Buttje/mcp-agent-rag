@@ -12,6 +12,11 @@ from agno.models.base import Model
 from mcp_agent_rag.rag.ollama_utils import get_model_capabilities
 
 
+# Known reasoning models that agno originally supported
+# These are checked first for backwards compatibility and performance
+KNOWN_REASONING_MODELS = ["qwq", "deepseek-r1", "qwen2.5-coder", "openthinker", "qwen3"]
+
+
 def is_ollama_reasoning_model_patched(reasoning_model: Model) -> bool:
     """Check if an Ollama model supports native reasoning/thinking.
     
@@ -29,10 +34,8 @@ def is_ollama_reasoning_model_patched(reasoning_model: Model) -> bool:
     if reasoning_model.__class__.__name__ != "Ollama":
         return False
     
-    # Check hardcoded list for backwards compatibility
-    # These are known reasoning models that agno originally supported
-    known_reasoning_models = ["qwq", "deepseek-r1", "qwen2.5-coder", "openthinker", "qwen3"]
-    if any(model_id in reasoning_model.id for model_id in known_reasoning_models):
+    # Check hardcoded list for backwards compatibility and performance
+    if any(model_id in reasoning_model.id for model_id in KNOWN_REASONING_MODELS):
         return True
     
     # Query Ollama API for model capabilities

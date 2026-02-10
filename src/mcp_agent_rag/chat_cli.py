@@ -359,13 +359,13 @@ def main():
         else:
             model_string = generative_model
 
-        # Check if the model has native thinking capability
-        ollama_host = config.get("ollama_host", "http://localhost:11434")
-        capabilities, cap_error = get_model_capabilities(generative_model, ollama_host)
-        
-        has_thinking = "thinking" in capabilities
-        
+        # Show model capability information in verbose mode
         if args.verbose:
+            ollama_host = config.get("ollama_host", "http://localhost:11434")
+            capabilities, cap_error = get_model_capabilities(generative_model, ollama_host)
+            
+            has_thinking = "thinking" in capabilities
+            
             if has_thinking:
                 print(f"✓ Model '{generative_model}' has native 'thinking' capability")
             elif not cap_error:
