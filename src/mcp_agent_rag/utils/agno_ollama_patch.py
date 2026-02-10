@@ -7,8 +7,6 @@ querying the Ollama API instead of relying on hardcoded model names.
 This is a temporary workaround until the fix is contributed to the agno library.
 """
 
-from typing import Optional
-
 from agno.models.base import Model
 
 from mcp_agent_rag.rag.ollama_utils import get_model_capabilities

@@ -21,7 +21,8 @@ def test_is_ollama_reasoning_model_patched_non_ollama():
     assert result is False
 
 
-def test_is_ollama_reasoning_model_patched_known_model():
+@patch("mcp_agent_rag.utils.agno_ollama_patch.get_model_capabilities")
+def test_is_ollama_reasoning_model_patched_known_model(mock_get_capabilities):
     """Test that known reasoning models return True without API call."""
     mock_model = Mock()
     mock_model.__class__.__name__ = "Ollama"
@@ -30,6 +31,8 @@ def test_is_ollama_reasoning_model_patched_known_model():
     result = is_ollama_reasoning_model_patched(mock_model)
     
     assert result is True
+    # Verify API was NOT called since it's a known model
+    mock_get_capabilities.assert_not_called()
 
 
 def test_is_ollama_reasoning_model_patched_deepseek():

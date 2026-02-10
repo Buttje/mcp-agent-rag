@@ -367,7 +367,7 @@ def main():
         
         if args.verbose and has_thinking:
             print(f"✓ Model '{generative_model}' has native 'thinking' capability")
-        elif args.verbose and not cap_error:
+        elif args.verbose and not has_thinking and not cap_error:
             print(f"ℹ Model '{generative_model}' does not have native 'thinking' capability")
             print("  Will use manual Chain-of-Thought reasoning instead")
         
