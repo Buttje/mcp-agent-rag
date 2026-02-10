@@ -580,13 +580,16 @@ class MCPServer:
                 prefix = db_info.get("prefix", "")
                 doc_count = db_info.get("doc_count", 0)
                 
+                # Format prefix display
+                prefix_display = prefix if prefix else "no prefix"
+                
                 # Build a descriptive string
                 if desc and doc_count:
-                    db_descriptions.append(f"{db_name} ({prefix if prefix else 'no prefix'}): {desc} - {doc_count} documents")
+                    db_descriptions.append(f"{db_name} ({prefix_display}): {desc} - {doc_count} documents")
                 elif desc:
-                    db_descriptions.append(f"{db_name} ({prefix if prefix else 'no prefix'}): {desc}")
+                    db_descriptions.append(f"{db_name} ({prefix_display}): {desc}")
                 else:
-                    db_descriptions.append(f"{db_name} ({prefix if prefix else 'no prefix'})")
+                    db_descriptions.append(f"{db_name} ({prefix_display})")
                 
                 db_names.append(db_name)
         

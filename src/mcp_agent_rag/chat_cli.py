@@ -37,6 +37,12 @@ class Colors:
     BG_YELLOW = "\033[103m"
 
 
+# Confidence thresholds for color coding
+CONFIDENCE_HIGH = 0.95  # Green
+CONFIDENCE_GOOD = 0.90  # Cyan
+CONFIDENCE_MIN = 0.85   # Yellow (matches filtering threshold)
+
+
 def format_confidence(confidence: float) -> str:
     """Format confidence score with color coding.
     
@@ -47,11 +53,11 @@ def format_confidence(confidence: float) -> str:
         Color-coded confidence string
     """
     percentage = confidence * 100
-    if confidence >= 0.95:
+    if confidence >= CONFIDENCE_HIGH:
         color = Colors.GREEN
-    elif confidence >= 0.90:
+    elif confidence >= CONFIDENCE_GOOD:
         color = Colors.CYAN
-    elif confidence >= 0.85:
+    elif confidence >= CONFIDENCE_MIN:
         color = Colors.YELLOW
     else:
         color = Colors.RED

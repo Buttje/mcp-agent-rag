@@ -731,10 +731,18 @@ class TestConfidenceScores:
         assert "result" in response
         tools = response["result"]["tools"]
         
-        # Check getInformationFor description
+        # Check getInformationFor description mentions confidence
         info_tool = next(t for t in tools if t["name"] == "getInformationFor")
-        assert "85%" in info_tool["description"] or "confidence" in info_tool["description"].lower()
+        desc_lower = info_tool["description"].lower()
+        assert "confidence" in desc_lower, "Tool description should mention confidence"
+        # Check for threshold value (could be 85%, 0.85, or eighty-five)
+        assert any(thresh in info_tool["description"] for thresh in ["85%", "0.85", ">85"]), \
+            "Tool description should mention 85% threshold"
         
-        # Check getInformationForDB description
+        # Check getInformationForDB description mentions confidence
         info_db_tool = next(t for t in tools if t["name"] == "getInformationForDB")
-        assert "85%" in info_db_tool["description"] or "confidence" in info_db_tool["description"].lower()
+        desc_lower = info_db_tool["description"].lower()
+        assert "confidence" in desc_lower, "Tool description should mention confidence"
+        # Check for threshold value
+        assert any(thresh in info_db_tool["description"] for thresh in ["85%", "0.85", ">85"]), \
+            "Tool description should mention 85% threshold"
