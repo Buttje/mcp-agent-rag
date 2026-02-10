@@ -77,8 +77,10 @@ class MCPClient:
             if self.verbose:
                 # Show a summary of the result
                 if "context" in result:
-                    context_preview = result["context"][:150] + "..." if len(result.get("context", "")) > 150 else result.get("context", "")
-                    print(f"   ✅ Result: Retrieved context ({len(result.get('context', ''))} chars)")
+                    context = result["context"]
+                    context_len = len(context)
+                    context_preview = context[:150] + "..." if context_len > 150 else context
+                    print(f"   ✅ Result: Retrieved context ({context_len} chars)")
                     print(f"   Preview: {context_preview}")
                     if "citations" in result:
                         print(f"   Citations: {len(result.get('citations', []))} sources")

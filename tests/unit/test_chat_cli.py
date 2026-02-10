@@ -272,18 +272,37 @@ def test_chat_cli_main_with_default_log_file(test_config):
                 assert "mcp-rag-cli.log" in call_args[1]["log_file"]
 
 
-def test_chat_cli_main_with_verbose_flag(test_config):
+def test_chat_cli_main_with_verbose_flag(test_config, capsys):
     """Test chat CLI main with --verbose flag."""
     test_args = ["mcp-rag-cli", "--verbose"]
 
     with patch.object(sys, "argv", test_args):
         with patch("mcp_agent_rag.chat_cli.setup_logger"):
             with patch("mcp_agent_rag.chat_cli.DatabaseManager") as MockDBManager:
+                # Mock database manager to return a test database
                 mock_db_manager = Mock()
-                mock_db_manager.list_databases.return_value = {}
+                test_db_info = {"test_db": {"doc_count": 5, "description": "Test DB"}}
+                mock_db_manager.list_databases.return_value = test_db_info
                 MockDBManager.return_value = mock_db_manager
 
-                with pytest.raises(SystemExit):
-                    main()
+                # Mock start_mcp_server to avoid starting actual server
+                with patch("mcp_agent_rag.chat_cli.start_mcp_server") as mock_start_server:
+                    mock_process = Mock()
+                    mock_start_server.return_value = mock_process
 
-                # Test passes if no exceptions during parsing (SystemExit expected for no databases)
+                    # Mock Agent to avoid needing Ollama
+                    with patch("mcp_agent_rag.chat_cli.Agent") as MockAgent:
+                        # Simulate user selecting database and then quitting
+                        with patch("builtins.input", side_effect=["1", "quit"]):
+                            main()
+
+                            # Verify MCPClient was created with verbose=True
+                            # by checking the output contains verbose mode message
+                            captured = capsys.readouterr()
+                            assert "🔍 Verbose mode enabled" in captured.out
+
+                            # Verify Agent was created with debug_mode and show_tool_calls
+                            MockAgent.assert_called_once()
+                            call_kwargs = MockAgent.call_args[1]
+                            assert call_kwargs.get("debug_mode") is True
+                            assert call_kwargs.get("show_tool_calls") is True
