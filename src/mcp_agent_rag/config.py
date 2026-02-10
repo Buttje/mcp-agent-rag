@@ -35,7 +35,23 @@ class Config:
         """Load existing config or create default."""
         if self.config_path.exists():
             with open(self.config_path, "r", encoding="utf-8") as f:
-                return json.load(f)
+                data = json.load(f)
+            
+            # Ensure new fields exist with defaults
+            defaults = self._create_default()
+            updated = False
+            for key in ["query_inference_threshold", "iteration_confidence_threshold", "final_augmentation_threshold"]:
+                if key not in data:
+                    data[key] = defaults[key]
+                    updated = True
+            
+            # Auto-save if we added new fields
+            if updated:
+                self.config_path.parent.mkdir(parents=True, exist_ok=True)
+                with open(self.config_path, "w", encoding="utf-8") as f:
+                    json.dump(data, f, indent=2)
+            
+            return data
         return self._create_default()
 
     def _create_default(self) -> Dict[str, Any]:
