@@ -8,6 +8,7 @@ import requests
 from mcp_agent_rag.rag.ollama_utils import (
     check_ollama_connection,
     fetch_ollama_models,
+    get_model_capabilities,
     normalize_ollama_host,
 )
 
@@ -207,3 +208,113 @@ def test_fetch_ollama_models_categorization(mock_get):
     assert "gte-base" in embedding_models
     assert "codellama" in generative_models
     assert "phi3" in generative_models
+
+
+@patch("mcp_agent_rag.rag.ollama_utils.requests.post")
+def test_get_model_capabilities_success(mock_post):
+    """Test successful retrieval of model capabilities."""
+    mock_response = Mock()
+    mock_response.status_code = 200
+    mock_response.json.return_value = {
+        "details": {
+            "capabilities": ["completion", "tools", "thinking"]
+        }
+    }
+    mock_post.return_value = mock_response
+
+    capabilities, error = get_model_capabilities("qwen3:30b")
+    
+    assert error == ""
+    assert len(capabilities) == 3
+    assert "completion" in capabilities
+    assert "tools" in capabilities
+    assert "thinking" in capabilities
+    mock_post.assert_called_once()
+
+
+@patch("mcp_agent_rag.rag.ollama_utils.requests.post")
+def test_get_model_capabilities_no_thinking(mock_post):
+    """Test model without thinking capability."""
+    mock_response = Mock()
+    mock_response.status_code = 200
+    mock_response.json.return_value = {
+        "details": {
+            "capabilities": ["completion", "tools"]
+        }
+    }
+    mock_post.return_value = mock_response
+
+    capabilities, error = get_model_capabilities("mistral:7b-instruct")
+    
+    assert error == ""
+    assert len(capabilities) == 2
+    assert "completion" in capabilities
+    assert "tools" in capabilities
+    assert "thinking" not in capabilities
+
+
+@patch("mcp_agent_rag.rag.ollama_utils.requests.post")
+def test_get_model_capabilities_timeout(mock_post):
+    """Test model capabilities fetch with timeout."""
+    mock_post.side_effect = requests.exceptions.Timeout()
+
+    capabilities, error = get_model_capabilities("qwen3:30b")
+    
+    assert capabilities == []
+    assert "timeout" in error.lower()
+
+
+@patch("mcp_agent_rag.rag.ollama_utils.requests.post")
+def test_get_model_capabilities_connection_error(mock_post):
+    """Test model capabilities fetch with connection error."""
+    mock_post.side_effect = requests.exceptions.ConnectionError()
+
+    capabilities, error = get_model_capabilities("qwen3:30b")
+    
+    assert capabilities == []
+    assert "cannot connect" in error.lower()
+
+
+@patch("mcp_agent_rag.rag.ollama_utils.requests.post")
+def test_get_model_capabilities_http_error(mock_post):
+    """Test model capabilities fetch with HTTP error."""
+    mock_response = Mock()
+    mock_response.status_code = 404
+    mock_post.return_value = mock_response
+
+    capabilities, error = get_model_capabilities("nonexistent:model")
+    
+    assert capabilities == []
+    assert "404" in error
+
+
+@patch("mcp_agent_rag.rag.ollama_utils.requests.post")
+def test_get_model_capabilities_no_details(mock_post):
+    """Test model with no details field."""
+    mock_response = Mock()
+    mock_response.status_code = 200
+    mock_response.json.return_value = {}
+    mock_post.return_value = mock_response
+
+    capabilities, error = get_model_capabilities("somemodel")
+    
+    assert error == ""
+    assert capabilities == []
+
+
+@patch("mcp_agent_rag.rag.ollama_utils.requests.post")
+def test_get_model_capabilities_no_capabilities_field(mock_post):
+    """Test model with details but no capabilities field."""
+    mock_response = Mock()
+    mock_response.status_code = 200
+    mock_response.json.return_value = {
+        "details": {
+            "parameter_size": "30B"
+        }
+    }
+    mock_post.return_value = mock_response
+
+    capabilities, error = get_model_capabilities("somemodel")
+    
+    assert error == ""
+    assert capabilities == []

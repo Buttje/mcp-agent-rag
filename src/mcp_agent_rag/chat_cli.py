@@ -10,7 +10,9 @@ from agno.agent import Agent
 
 from mcp_agent_rag.config import Config
 from mcp_agent_rag.database import DatabaseManager
+from mcp_agent_rag.rag.ollama_utils import get_model_capabilities
 from mcp_agent_rag.utils import get_logger, setup_logger
+from mcp_agent_rag.utils.agno_ollama_patch import apply_agno_ollama_patch
 
 
 class MCPClient:
@@ -220,6 +222,10 @@ def main():
     """Main chat CLI entry point with MCP server and AGNO agent."""
     import argparse
 
+    # Apply patch to agno library for better Ollama model capability detection
+    # This must be done before any Agent instances are created
+    apply_agno_ollama_patch()
+
     # Parse command-line arguments
     parser = argparse.ArgumentParser(description="MCP-RAG Interactive Chat Client")
     parser.add_argument(
@@ -353,6 +359,18 @@ def main():
         else:
             model_string = generative_model
 
+        # Check if the model has native thinking capability
+        ollama_host = config.get("ollama_host", "http://localhost:11434")
+        capabilities, cap_error = get_model_capabilities(generative_model, ollama_host)
+        
+        has_thinking = "thinking" in capabilities if capabilities else False
+        
+        if args.verbose and has_thinking:
+            print(f"✓ Model '{generative_model}' has native 'thinking' capability")
+        elif args.verbose and not cap_error:
+            print(f"ℹ Model '{generative_model}' does not have native 'thinking' capability")
+            print("  Will use manual Chain-of-Thought reasoning instead")
+        
         # Initialize AGNO agent with Ollama model
         agent = Agent(
             name="MCP-RAG Assistant",
