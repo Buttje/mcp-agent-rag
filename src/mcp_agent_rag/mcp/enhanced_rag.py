@@ -23,12 +23,19 @@ class EnhancedRetrieval:
     For true agentic behavior, use AgenticRAG instead.
     """
 
-    def __init__(self, config: Config, databases: Dict[str, VectorDatabase]):
+    def __init__(
+        self,
+        config: Config,
+        databases: Dict[str, VectorDatabase],
+        min_confidence: float = 0.85,
+    ):
         """Initialize enhanced retrieval.
 
         Args:
             config: Configuration instance
             databases: Dictionary of loaded databases
+            min_confidence: Minimum confidence score (0-1) for results to be included.
+                Results below this threshold are discarded as low quality.
         """
         self.config = config
         self.databases = databases
@@ -37,6 +44,7 @@ class EnhancedRetrieval:
             host=config.get("ollama_host", "http://localhost:11434"),
         )
         self.max_context_length = config.get("max_context_length", 4000)
+        self.min_confidence = min_confidence
 
     def get_context(self, prompt: str, max_results: int = 5) -> Dict:
         """Get context for prompt using enhanced retrieval.
@@ -46,7 +54,9 @@ class EnhancedRetrieval:
             max_results: Maximum results per database
 
         Returns:
-            Dictionary with context text, citations, and databases searched
+            Dictionary with context text, citations, and databases searched.
+            Includes confidence scores for each result. Only results with
+            confidence >= min_confidence threshold are included.
         """
         # Generate query embedding
         query_embedding = self.embedder.embed_single(prompt)
@@ -56,6 +66,7 @@ class EnhancedRetrieval:
                 "text": "",
                 "citations": [],
                 "databases_searched": [],
+                "average_confidence": 0.0,
             }
 
         # Search all active databases
@@ -66,9 +77,22 @@ class EnhancedRetrieval:
             try:
                 results = db.search(query_embedding, k=max_results)
                 for distance, metadata in results:
+                    # Convert distance to confidence score (0-1 range)
+                    # Lower distance = higher confidence
+                    confidence = 1.0 / (1.0 + distance)
+                    
+                    # Filter by minimum confidence threshold
+                    if confidence < self.min_confidence:
+                        logger.debug(
+                            f"Discarding result with confidence {confidence:.2f} "
+                            f"< threshold {self.min_confidence:.2f}"
+                        )
+                        continue
+                    
                     all_results.append({
                         "database": db_name,
                         "distance": distance,
+                        "confidence": confidence,
                         "text": metadata.get("text", ""),
                         "source": metadata.get("source", ""),
                         "chunk_num": metadata.get("chunk_num", 0),
@@ -79,14 +103,16 @@ class EnhancedRetrieval:
             except Exception as e:
                 logger.error(f"Error searching database '{db_name}': {e}")
 
-        # Sort by distance (lower is better)
-        all_results.sort(key=lambda x: x["distance"])
+        # Sort by confidence (higher is better)
+        all_results.sort(key=lambda x: x["confidence"], reverse=True)
 
         # Deduplicate and aggregate
         context_parts = []
         citations = []
         seen_sources = set()
         total_length = 0
+        confidence_sum = 0.0
+        confidence_count = 0
 
         for result in all_results:
             source = result["source"]
@@ -111,17 +137,22 @@ class EnhancedRetrieval:
                 "source": source,
                 "chunk": chunk_num,
                 "database": result["database"],
+                "confidence": result["confidence"],
             })
             seen_sources.add(source_key)
             total_length += len(chunk_text)
+            confidence_sum += result["confidence"]
+            confidence_count += 1
 
         # Compose final context
         context_text = "\n\n".join(context_parts)
+        average_confidence = confidence_sum / confidence_count if confidence_count > 0 else 0.0
 
         return {
             "text": context_text,
             "citations": citations,
             "databases_searched": databases_searched,
+            "average_confidence": average_confidence,
         }
 
     def _get_chunk_text(self, metadata: Dict) -> str:
@@ -144,6 +175,9 @@ class AgenticRAG:
     2. Retriever: Fetches candidate chunks from databases
     3. Reranker: Re-scores results for improved precision
     4. Critic: Evaluates quality and decides on iteration
+    
+    The agent prioritizes RAG database retrieval and discards low-confidence
+    results (below 85% confidence threshold).
     """
 
     def __init__(
@@ -151,6 +185,7 @@ class AgenticRAG:
         config: Config,
         databases: Dict[str, VectorDatabase],
         max_iterations: int = 3,
+        min_confidence: float = 0.85,
     ):
         """Initialize agentic RAG.
 
@@ -158,10 +193,13 @@ class AgenticRAG:
             config: Configuration instance
             databases: Dictionary of loaded databases
             max_iterations: Maximum number of retrieval iterations
+            min_confidence: Minimum confidence score (0-1) for results to be included.
+                Results below this threshold are discarded as low quality.
         """
         self.config = config
         self.databases = databases
         self.max_iterations = max_iterations
+        self.min_confidence = min_confidence
         self.embedder = OllamaEmbedder(
             model=config.get("embedding_model", "nomic-embed-text"),
             host=config.get("ollama_host", "http://localhost:11434"),
@@ -259,7 +297,7 @@ class AgenticRAG:
             max_results: Max results per database
 
         Returns:
-            List of result dictionaries
+            List of result dictionaries with confidence scores
         """
         query_embedding = self.embedder.embed_single(prompt)
         if not query_embedding:
@@ -274,6 +312,17 @@ class AgenticRAG:
             try:
                 results = db.search(query_embedding, k=max_results)
                 for distance, metadata in results:
+                    # Convert distance to confidence score
+                    confidence = 1.0 / (1.0 + distance)
+                    
+                    # Filter by minimum confidence threshold
+                    if confidence < self.min_confidence:
+                        logger.debug(
+                            f"Discarding result with confidence {confidence:.2f} "
+                            f"< threshold {self.min_confidence:.2f}"
+                        )
+                        continue
+                    
                     all_results.append({
                         "database": db_name,
                         "distance": distance,
@@ -281,7 +330,8 @@ class AgenticRAG:
                         "source": metadata.get("source", ""),
                         "chunk_num": metadata.get("chunk_num", 0),
                         "metadata": metadata,
-                        "score": 1.0 / (1.0 + distance),  # Convert distance to score
+                        "score": confidence,
+                        "confidence": confidence,
                     })
             except Exception as e:
                 logger.error(f"Error retrieving from {db_name}: {e}")
@@ -310,13 +360,15 @@ class AgenticRAG:
             results: Reranked results
 
         Returns:
-            Context dictionary
+            Context dictionary with confidence scores
         """
         context_parts = []
         citations = []
         seen_sources = set()
         total_length = 0
         databases_searched = set()
+        confidence_sum = 0.0
+        confidence_count = 0
 
         for result in results:
             source = result["source"]
@@ -339,15 +391,21 @@ class AgenticRAG:
                 "chunk": chunk_num,
                 "database": result["database"],
                 "score": result["score"],
+                "confidence": result.get("confidence", result["score"]),
             })
             seen_sources.add(source_key)
             total_length += len(chunk_text)
             databases_searched.add(result["database"])
+            confidence_sum += result.get("confidence", result["score"])
+            confidence_count += 1
+
+        average_confidence = confidence_sum / confidence_count if confidence_count > 0 else 0.0
 
         return {
             "text": "\n\n".join(context_parts),
             "citations": citations,
             "databases_searched": list(databases_searched),
+            "average_confidence": average_confidence,
         }
 
     def _critic(self, prompt: str, context: Dict, iteration: int) -> Tuple[float, bool]:
