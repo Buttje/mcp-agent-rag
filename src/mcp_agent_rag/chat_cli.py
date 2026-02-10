@@ -363,13 +363,14 @@ def main():
         ollama_host = config.get("ollama_host", "http://localhost:11434")
         capabilities, cap_error = get_model_capabilities(generative_model, ollama_host)
         
-        has_thinking = "thinking" in capabilities if capabilities else False
+        has_thinking = "thinking" in capabilities
         
-        if args.verbose and has_thinking:
-            print(f"✓ Model '{generative_model}' has native 'thinking' capability")
-        elif args.verbose and not has_thinking and not cap_error:
-            print(f"ℹ Model '{generative_model}' does not have native 'thinking' capability")
-            print("  Will use manual Chain-of-Thought reasoning instead")
+        if args.verbose:
+            if has_thinking:
+                print(f"✓ Model '{generative_model}' has native 'thinking' capability")
+            elif not cap_error:
+                print(f"ℹ Model '{generative_model}' does not have native 'thinking' capability")
+                print("  Will use manual Chain-of-Thought reasoning instead")
         
         # Initialize AGNO agent with Ollama model
         agent = Agent(
