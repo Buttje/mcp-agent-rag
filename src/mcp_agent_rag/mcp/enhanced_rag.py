@@ -217,6 +217,9 @@ class AgenticRAG:
         self.max_context_length = config.get("max_context_length", 4000)
         
         # Load inference probability thresholds from config
+        # These thresholds are stored for future use (e.g., more sophisticated
+        # confidence scoring, probabilistic decision making in tool calls).
+        # Currently, they guide the agent's behavior conceptually.
         self.query_inference_threshold = config.get("query_inference_threshold", 0.80)
         self.iteration_confidence_threshold = config.get("iteration_confidence_threshold", 0.90)
         self.final_augmentation_threshold = config.get("final_augmentation_threshold", 0.80)
@@ -568,12 +571,13 @@ Instructions:
 3. After receiving results, evaluate if you have enough information to answer the question
 4. If there are gaps in the information or the answer is incomplete, generate additional queries
 5. Continue until you have sufficient information or determine that the information cannot be found
+6. When you have enough information to provide a complete answer, STOP using tools and respond with your analysis
 
 Available databases and their tools:
 {json.dumps(tool_descriptions, indent=2)}
 
-When you have gathered enough information to provide a complete answer, respond with your analysis.
-If you need more information to fully answer the question, use the query tools."""
+IMPORTANT: Stop making tool calls when you have gathered enough information to answer the question completely.
+If you need more information, use the query tools."""
 
     def _format_retrieved_item(self, item: Dict) -> str:
         """Format a retrieved data item for context display.
@@ -780,7 +784,8 @@ Create a concise, well-supported augmentation that helps answer the question."""
             
             augmentation = self.generator.generate(augmentation_prompt, "")
             if augmentation:
-                final_context = f"Context augmentation:\n{augmentation}\n\nDetailed information:\n{final_context}"
+                enriched_context = f"Context augmentation:\n{augmentation}\n\nDetailed information:\n{final_context}"
+                final_context = enriched_context
         
         logger.info(f"Completed LLM-based RAG flow: {iteration} iterations, {len(all_citations)} citations")
         
