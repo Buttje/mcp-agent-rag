@@ -52,8 +52,21 @@ class OCRProcessor:
             try:
                 import easyocr
 
+                # Check GPU availability
+                gpu_available = False
+                try:
+                    import torch
+                    gpu_available = torch.cuda.is_available()
+                except ImportError:
+                    pass
+
                 logger.info("Initializing EasyOCR reader (this may take a moment)...")
-                _ocr_reader = easyocr.Reader(["en"], gpu=False, verbose=False)
+                if gpu_available:
+                    logger.info("GPU detected, using GPU acceleration for OCR")
+                    _ocr_reader = easyocr.Reader(["en"], gpu=True, verbose=False)
+                else:
+                    logger.info("No GPU detected, using CPU for OCR")
+                    _ocr_reader = easyocr.Reader(["en"], gpu=False, verbose=False)
                 logger.info("EasyOCR reader initialized successfully")
             except Exception as e:
                 logger.error(f"Failed to initialize EasyOCR: {e}")

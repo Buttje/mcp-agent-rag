@@ -49,6 +49,8 @@ class Config:
             "ollama_host": "http://localhost:11434",
             "log_level": "INFO",
             "max_context_length": 4000,
+            "gpu_enabled": True,  # Enable GPU usage if available
+            "gpu_device": None,  # None = auto-detect, or specify device index
         }
 
     def save(self) -> None:

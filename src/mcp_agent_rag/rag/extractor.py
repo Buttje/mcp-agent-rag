@@ -68,19 +68,33 @@ class DocumentExtractor:
         if _ocr_reader is None:
             try:
                 import easyocr
+                
+                # Check GPU availability
+                gpu_available = False
+                try:
+                    import torch
+                    gpu_available = torch.cuda.is_available()
+                except ImportError:
+                    pass
+                
                 logger.info("Initializing EasyOCR reader (this may take a moment)...")
                 
-                # Suppress the pin_memory warning when using CPU-only mode
-                # This warning occurs because EasyOCR's internal DataLoader uses pin_memory=True
-                # by default, but pin_memory is only beneficial when using GPU acceleration.
-                # Since we're using gpu=False, the warning is harmless and can be safely ignored.
-                with warnings.catch_warnings():
-                    warnings.filterwarnings(
-                        'ignore',
-                        message=".*pin_memory.*no accelerator.*",
-                        category=UserWarning
-                    )
-                    _ocr_reader = easyocr.Reader(['en'], gpu=False, verbose=False)
+                if gpu_available:
+                    logger.info("GPU detected, using GPU acceleration for OCR")
+                    _ocr_reader = easyocr.Reader(['en'], gpu=True, verbose=False)
+                else:
+                    logger.info("No GPU detected, using CPU for OCR")
+                    # Suppress the pin_memory warning when using CPU-only mode
+                    # This warning occurs because EasyOCR's internal DataLoader uses pin_memory=True
+                    # by default, but pin_memory is only beneficial when using GPU acceleration.
+                    # Since we're using gpu=False, the warning is harmless and can be safely ignored.
+                    with warnings.catch_warnings():
+                        warnings.filterwarnings(
+                            'ignore',
+                            message=".*pin_memory.*no accelerator.*",
+                            category=UserWarning
+                        )
+                        _ocr_reader = easyocr.Reader(['en'], gpu=False, verbose=False)
                 
                 logger.info("EasyOCR reader initialized successfully")
             except Exception as e:
