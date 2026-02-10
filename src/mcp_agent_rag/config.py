@@ -51,6 +51,10 @@ class Config:
             "max_context_length": 4000,
             "gpu_enabled": True,  # Enable GPU usage when available (users can disable)
             "gpu_device": None,  # None = auto-detect, or specify device index
+            # Agentic RAG inference probability thresholds
+            "query_inference_threshold": 0.80,  # Inference threshold for generating RAG queries
+            "iteration_confidence_threshold": 0.90,  # Threshold for accepting information completeness
+            "final_augmentation_threshold": 0.80,  # Inference threshold for final prompt augmentation
         }
 
     def save(self) -> None:

@@ -183,6 +183,10 @@ class EnhancedConfig:
             "profile": self.profile_name,
             "ollama_host": "http://localhost:11434",
             "databases": {},
+            # Agentic RAG inference probability thresholds
+            "query_inference_threshold": 0.80,  # Inference threshold for generating RAG queries
+            "iteration_confidence_threshold": 0.90,  # Threshold for accepting information completeness
+            "final_augmentation_threshold": 0.80,  # Inference threshold for final prompt augmentation
             **profile_config,
         }
 
