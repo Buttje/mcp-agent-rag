@@ -270,3 +270,156 @@ class OllamaGenerator:
             return response.status_code == 200
         except Exception:
             return False
+
+    def generate_with_tools(
+        self,
+        prompt: str,
+        tools: list[dict],
+        context: str = "",
+        system_prompt: str = "",
+    ) -> dict | None:
+        """Generate a response with tool calling support.
+
+        Args:
+            prompt: User prompt
+            tools: List of tool definitions for the LLM
+            context: Additional context to include
+            system_prompt: System prompt to guide the LLM
+
+        Returns:
+            Dictionary with 'response' (text) and optional 'tool_calls' (list)
+        """
+        try:
+            # Build messages
+            messages = []
+            
+            # Add system message
+            if system_prompt:
+                messages.append({"role": "system", "content": system_prompt})
+            
+            # Add context if provided
+            if context:
+                messages.append({
+                    "role": "system",
+                    "content": f"Context:\n{context}"
+                })
+            
+            # Add user prompt
+            messages.append({"role": "user", "content": prompt})
+            
+            # Build payload with tools
+            payload = {
+                "model": self.model,
+                "messages": messages,
+                "stream": False,
+            }
+            
+            # Add tools if chat API is being used
+            if self._api_mode == "chat" and tools:
+                payload["tools"] = tools
+            
+            response = requests.post(
+                self.generate_url,
+                json=payload,
+                timeout=120,
+            )
+            response.raise_for_status()
+            
+            result = response.json()
+            
+            # Parse response
+            if self._api_mode == "chat":
+                message = result.get("message", {})
+                content = message.get("content", "")
+                tool_calls = message.get("tool_calls", [])
+                
+                return {
+                    "response": content,
+                    "tool_calls": tool_calls,
+                }
+            else:
+                # For /api/generate, no native tool support
+                # Return just the text response
+                return {
+                    "response": result.get("response", ""),
+                    "tool_calls": [],
+                }
+        
+        except requests.exceptions.RequestException as e:
+            logger.error(f"Error connecting to Ollama: {e}")
+            return None
+        except Exception as e:
+            logger.error(f"Error generating response with tools: {e}")
+            return None
+
+    def generate_json(
+        self,
+        prompt: str,
+        context: str = "",
+        system_prompt: str = "",
+    ) -> dict | None:
+        """Generate a JSON response using structured output.
+
+        Args:
+            prompt: User prompt
+            context: Additional context to include
+            system_prompt: System prompt to guide the LLM
+
+        Returns:
+            Dictionary parsed from JSON response or None if failed
+        """
+        try:
+            # Build messages
+            messages = []
+            
+            # Add system message
+            if system_prompt:
+                messages.append({"role": "system", "content": system_prompt})
+            
+            # Add context if provided
+            if context:
+                messages.append({
+                    "role": "system",
+                    "content": f"Context:\n{context}"
+                })
+            
+            # Add user prompt
+            messages.append({"role": "user", "content": prompt})
+            
+            # Build payload
+            payload = {
+                "model": self.model,
+                "messages": messages,
+                "stream": False,
+                "format": "json",  # Request JSON format
+            }
+            
+            response = requests.post(
+                self.generate_url,
+                json=payload,
+                timeout=120,
+            )
+            response.raise_for_status()
+            
+            result = response.json()
+            
+            # Parse response
+            if self._api_mode == "chat":
+                content = result.get("message", {}).get("content", "")
+            else:
+                content = result.get("response", "")
+            
+            # Parse JSON from content
+            try:
+                return json.loads(content)
+            except json.JSONDecodeError as e:
+                logger.error(f"Failed to parse JSON response: {e}")
+                logger.debug(f"Response content: {content}")
+                return None
+        
+        except requests.exceptions.RequestException as e:
+            logger.error(f"Error connecting to Ollama: {e}")
+            return None
+        except Exception as e:
+            logger.error(f"Error generating JSON response: {e}")
+            return None

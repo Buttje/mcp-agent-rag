@@ -7,10 +7,11 @@ This module implements a true "agentic" retrieval system with:
 - Critic: Validates result quality and determines if iteration needed
 """
 
+import json
 from typing import Dict, List, Optional, Tuple
 
 from mcp_agent_rag.config import Config
-from mcp_agent_rag.rag import OllamaEmbedder, VectorDatabase
+from mcp_agent_rag.rag import OllamaEmbedder, OllamaGenerator, VectorDatabase
 from mcp_agent_rag.utils import get_logger
 
 logger = get_logger(__name__)
@@ -204,10 +205,21 @@ class AgenticRAG:
             model=config.get("embedding_model", "nomic-embed-text"),
             host=config.get("ollama_host", "http://localhost:11434"),
         )
+        self.generator = OllamaGenerator(
+            model=config.get("generative_model", "mistral:7b-instruct"),
+            host=config.get("ollama_host", "http://localhost:11434"),
+        )
         self.max_context_length = config.get("max_context_length", 4000)
+        
+        # Load inference probability thresholds from config
+        self.query_inference_threshold = config.get("query_inference_threshold", 0.80)
+        self.iteration_confidence_threshold = config.get("iteration_confidence_threshold", 0.90)
+        self.final_augmentation_threshold = config.get("final_augmentation_threshold", 0.80)
 
     def get_context(self, prompt: str, max_results: int = 5) -> Dict:
         """Get context using agentic RAG pipeline.
+        
+        Uses LLM-based ReAct pattern for intelligent database querying.
 
         Args:
             prompt: User prompt
@@ -216,57 +228,8 @@ class AgenticRAG:
         Returns:
             Dictionary with context, citations, metadata
         """
-        iteration = 0
-        best_context = None
-        best_score = 0.0
-        all_citations = []
-
-        while iteration < self.max_iterations:
-            iteration += 1
-            logger.info(f"Agentic RAG iteration {iteration}/{self.max_iterations}")
-
-            # Step 1: Router - Analyze query
-            query_analysis = self._route(prompt, iteration)
-
-            # Step 2: Retriever - Fetch results
-            results = self._retrieve(prompt, query_analysis, max_results)
-
-            # Step 3: Reranker - Score and reorder
-            reranked_results = self._rerank(prompt, results)
-
-            # Step 4: Build context
-            context = self._build_context(reranked_results)
-
-            # Step 5: Critic - Evaluate quality
-            quality_score, should_continue = self._critic(prompt, context, iteration)
-
-            # Track best result
-            if quality_score > best_score:
-                best_score = quality_score
-                best_context = context
-                all_citations = context.get("citations", [])
-
-            # Exit if quality is sufficient or max iterations reached
-            if not should_continue or iteration >= self.max_iterations:
-                break
-
-            # Refine query for next iteration
-            prompt = self._refine_query(prompt, context)
-
-        # Return best context found
-        if best_context:
-            best_context["iterations"] = iteration
-            best_context["quality_score"] = best_score
-            return best_context
-
-        # Fallback to empty
-        return {
-            "text": "",
-            "citations": [],
-            "databases_searched": list(self.databases.keys()),
-            "iterations": iteration,
-            "quality_score": 0.0,
-        }
+        # Use LLM-based agentic flow
+        return self.get_context_with_llm(prompt, max_results)
 
     def _route(self, prompt: str, iteration: int) -> Dict:
         """Route query to appropriate databases and strategies.
@@ -467,3 +430,302 @@ class AgenticRAG:
         
         # For now, just return original (no refinement)
         return original_prompt
+
+    def _build_database_tools(self) -> List[Dict]:
+        """Build tool definitions for RAG database capabilities.
+        
+        Returns:
+            List of tool definitions for LLM
+        """
+        tools = []
+        for db_name, db in self.databases.items():
+            db_info = self.config.get_database(db_name)
+            description = db_info.get("description", f"Database: {db_name}") if db_info else f"Database: {db_name}"
+            doc_count = db_info.get("doc_count", 0) if db_info else 0
+            
+            tools.append({
+                "type": "function",
+                "function": {
+                    "name": f"query_{db_name.replace('-', '_').replace(' ', '_')}",
+                    "description": f"{description}. Contains {doc_count} documents. Use this to retrieve information from the {db_name} database.",
+                    "parameters": {
+                        "type": "object",
+                        "properties": {
+                            "query": {
+                                "type": "string",
+                                "description": "The search query to find relevant information in the database"
+                            }
+                        },
+                        "required": ["query"]
+                    }
+                }
+            })
+        
+        return tools
+
+    def _execute_tool_call(self, tool_call: Dict, max_results: int = 5) -> Dict:
+        """Execute a tool call (database query) from the LLM.
+        
+        Args:
+            tool_call: Tool call from LLM with function name and arguments
+            max_results: Maximum results to return
+            
+        Returns:
+            Dictionary with query results
+        """
+        function_name = tool_call.get("function", {}).get("name", "")
+        arguments = tool_call.get("function", {}).get("arguments", {})
+        
+        # Parse arguments if they're a JSON string
+        if isinstance(arguments, str):
+            try:
+                arguments = json.loads(arguments)
+            except json.JSONDecodeError:
+                logger.error(f"Failed to parse tool arguments: {arguments}")
+                return {"error": "Invalid arguments format"}
+        
+        # Extract database name from function name (query_<db_name>)
+        if not function_name.startswith("query_"):
+            return {"error": f"Unknown function: {function_name}"}
+        
+        db_name_normalized = function_name[6:]  # Remove "query_" prefix
+        
+        # Find matching database
+        db_name = None
+        for name in self.databases.keys():
+            if name.replace('-', '_').replace(' ', '_') == db_name_normalized:
+                db_name = name
+                break
+        
+        if not db_name or db_name not in self.databases:
+            return {"error": f"Database not found: {db_name_normalized}"}
+        
+        query = arguments.get("query", "")
+        if not query:
+            return {"error": "No query provided"}
+        
+        # Execute the query
+        query_embedding = self.embedder.embed_single(query)
+        if not query_embedding:
+            return {"error": "Failed to generate query embedding"}
+        
+        db = self.databases[db_name]
+        try:
+            results = db.search(query_embedding, k=max_results)
+            
+            # Format results
+            formatted_results = []
+            for distance, metadata in results:
+                confidence = 1.0 / (1.0 + distance)
+                
+                # Filter by minimum confidence
+                if confidence < self.min_confidence:
+                    continue
+                
+                formatted_results.append({
+                    "text": metadata.get("text", ""),
+                    "source": metadata.get("source", ""),
+                    "chunk": metadata.get("chunk_num", 0),
+                    "confidence": confidence,
+                })
+            
+            return {
+                "database": db_name,
+                "query": query,
+                "results": formatted_results,
+                "count": len(formatted_results),
+            }
+            
+        except Exception as e:
+            logger.error(f"Error executing query: {e}")
+            return {"error": str(e)}
+
+    def get_context_with_llm(self, prompt: str, max_results: int = 5) -> Dict:
+        """Get context using LLM-based agentic RAG flow.
+        
+        This implements the ReAct pattern:
+        1. LLM receives user prompt and database tool descriptions
+        2. LLM generates queries for RAG databases using tools
+        3. Agent retrieves information from databases
+        4. LLM evaluates information gaps and generates more queries
+        5. Process repeats until information is complete or max iterations reached
+        6. LLM generates final prompt augmentation
+        
+        Args:
+            prompt: User prompt
+            max_results: Maximum results per database query
+            
+        Returns:
+            Dictionary with augmented context, citations, and metadata
+        """
+        logger.info("Starting LLM-based agentic RAG flow")
+        
+        # Build tool definitions for databases
+        tools = self._build_database_tools()
+        
+        if not tools:
+            logger.warning("No databases available for querying")
+            return {
+                "text": "",
+                "citations": [],
+                "databases_searched": [],
+                "average_confidence": 0.0,
+                "iterations": 0,
+            }
+        
+        # System prompt for the LLM
+        system_prompt = f"""You are a helpful AI assistant with access to multiple knowledge databases. 
+Your task is to help answer the user's question by querying the appropriate databases.
+
+Instructions:
+1. Analyze the user's question carefully
+2. Use the available database query tools to retrieve relevant information
+3. After receiving results, evaluate if you have enough information or if there are gaps
+4. If there are information gaps, generate additional queries to fill those gaps
+5. Continue until you have sufficient information or determine that the information cannot be found
+
+Available databases and their tools:
+{json.dumps([{'name': tool['function']['name'], 'description': tool['function']['description']} for tool in tools], indent=2)}
+
+When you have gathered sufficient information (confidence >= {self.iteration_confidence_threshold * 100}%), respond with your analysis.
+If you need more information (inference probability >= {self.query_inference_threshold * 100}%), use the query tools."""
+
+        # Track all retrieved information
+        all_retrieved_data = []
+        all_citations = []
+        databases_searched = set()
+        iteration = 0
+        
+        # Iterative retrieval loop
+        conversation_history = []
+        current_prompt = prompt
+        
+        while iteration < self.max_iterations:
+            iteration += 1
+            logger.info(f"LLM-based RAG iteration {iteration}/{self.max_iterations}")
+            
+            # Build context from previous retrievals
+            context = ""
+            if all_retrieved_data:
+                context = "Previously retrieved information:\n" + "\n\n".join(
+                    [f"From {item['database']}: {item['text'][:500]}..." if len(item['text']) > 500 
+                     else f"From {item['database']}: {item['text']}" 
+                     for item in all_retrieved_data[:5]]  # Limit context to avoid token overflow
+                )
+            
+            # Call LLM with tools
+            response = self.generator.generate_with_tools(
+                prompt=current_prompt,
+                tools=tools,
+                context=context,
+                system_prompt=system_prompt,
+            )
+            
+            if not response:
+                logger.error("Failed to get LLM response")
+                break
+            
+            tool_calls = response.get("tool_calls", [])
+            
+            # If no tool calls, LLM thinks it has enough information
+            if not tool_calls:
+                logger.info("LLM did not request more information")
+                break
+            
+            # Execute tool calls
+            new_data_retrieved = False
+            for tool_call in tool_calls:
+                result = self._execute_tool_call(tool_call, max_results)
+                
+                if "error" in result:
+                    logger.error(f"Tool execution error: {result['error']}")
+                    continue
+                
+                # Store retrieved data
+                db_name = result.get("database", "")
+                databases_searched.add(db_name)
+                
+                for item in result.get("results", []):
+                    all_retrieved_data.append({
+                        "database": db_name,
+                        "text": item["text"],
+                        "source": item["source"],
+                        "chunk": item["chunk"],
+                        "confidence": item["confidence"],
+                    })
+                    all_citations.append({
+                        "source": item["source"],
+                        "chunk": item["chunk"],
+                        "database": db_name,
+                        "confidence": item["confidence"],
+                    })
+                    new_data_retrieved = True
+            
+            # If no new data was retrieved, stop
+            if not new_data_retrieved:
+                logger.info("No new data retrieved, stopping iteration")
+                break
+            
+            # Update prompt for next iteration (ask LLM to evaluate gaps)
+            current_prompt = f"""Based on the information retrieved so far, evaluate:
+1. Do we have sufficient information to answer the original question: "{prompt}"?
+2. Are there any information gaps that need to be filled?
+3. What additional queries (if any) should we make?
+
+Respond with additional queries if needed (inference probability >= {self.query_inference_threshold * 100}%), 
+or indicate that the information is sufficient (confidence >= {self.iteration_confidence_threshold * 100}%)."""
+        
+        # Build final context
+        context_parts = []
+        seen_sources = set()
+        total_length = 0
+        confidence_sum = 0.0
+        confidence_count = 0
+        
+        # Sort by confidence
+        all_retrieved_data.sort(key=lambda x: x["confidence"], reverse=True)
+        
+        for item in all_retrieved_data:
+            source_key = f"{item['source']}:{item['chunk']}"
+            if source_key in seen_sources:
+                continue
+            
+            text = item["text"]
+            if total_length + len(text) > self.max_context_length:
+                break
+            
+            context_parts.append(text)
+            seen_sources.add(source_key)
+            total_length += len(text)
+            confidence_sum += item["confidence"]
+            confidence_count += 1
+        
+        # Generate final augmentation
+        final_context = "\n\n".join(context_parts)
+        average_confidence = confidence_sum / confidence_count if confidence_count > 0 else 0.0
+        
+        # Ask LLM to create prompt augmentation
+        if final_context:
+            augmentation_prompt = f"""Based on the following retrieved information, create a high-quality prompt augmentation 
+that enriches the original user prompt with relevant context. 
+
+Original prompt: {prompt}
+
+Retrieved information:
+{final_context[:2000]}  
+
+Create a concise augmentation (inference threshold: {self.final_augmentation_threshold * 100}%) that helps answer the question."""
+            
+            augmentation = self.generator.generate(augmentation_prompt, "")
+            if augmentation:
+                final_context = f"Context augmentation:\n{augmentation}\n\nDetailed information:\n{final_context}"
+        
+        logger.info(f"Completed LLM-based RAG flow: {iteration} iterations, {len(all_citations)} citations")
+        
+        return {
+            "text": final_context,
+            "citations": all_citations,
+            "databases_searched": list(databases_searched),
+            "average_confidence": average_confidence,
+            "iterations": iteration,
+        }
