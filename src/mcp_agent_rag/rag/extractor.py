@@ -290,31 +290,64 @@ class DocumentExtractor:
     @staticmethod
     def _extract_pdf(file_path: Path) -> str:
         """Extract text from PDF file, including OCR on embedded images."""
-        with open(file_path, "rb") as f:
-            reader = pypdf.PdfReader(f)
-            text_parts = []
-            for i, page in enumerate(reader.pages):
-                # Extract regular text
-                text = page.extract_text()
-                if text.strip():
-                    text_parts.append(f"Page {i + 1}:\n{text}")
-                
-                # Extract images and perform OCR if available
-                if hasattr(page, 'images') and DocumentExtractor._get_ocr_reader() is not None:
-                    for img_index, image in enumerate(page.images):
-                        try:
-                            image_text = DocumentExtractor._extract_text_from_image_bytes(
-                                image.data,
-                                f"PDF page {i + 1} image {img_index + 1}"
-                            )
-                            if image_text.strip():
-                                text_parts.append(
-                                    f"Page {i + 1} - Image {img_index + 1}:\n{image_text}"
-                                )
-                        except Exception as e:
-                            logger.debug(f"Could not extract text from image on page {i + 1}: {e}")
-                            
-            return "\n".join(text_parts)
+        import logging
+        
+        # Suppress pypdf warnings about malformed PDFs
+        # These warnings (Invalid Lookup Table, Fax4Decode errors, image mask size mismatches)
+        # are non-fatal and occur when processing PDFs with corrupted compression streams,
+        # invalid lookup tables, or misaligned image masks. pypdf continues processing despite
+        # these issues, so we suppress the warnings to avoid cluttering the logs.
+        pypdf_logger = logging.getLogger("pypdf")
+        original_level = pypdf_logger.level
+        pypdf_logger.setLevel(logging.ERROR)
+        
+        try:
+            with open(file_path, "rb") as f:
+                # Suppress warnings about PDF parsing issues
+                with warnings.catch_warnings():
+                    warnings.filterwarnings(
+                        'ignore',
+                        message=".*Invalid Lookup Table.*",
+                        category=Warning
+                    )
+                    warnings.filterwarnings(
+                        'ignore',
+                        message=".*Fax4Decode.*",
+                        category=Warning
+                    )
+                    warnings.filterwarnings(
+                        'ignore',
+                        message=".*image and mask.*",
+                        category=Warning
+                    )
+                    
+                    reader = pypdf.PdfReader(f)
+                    text_parts = []
+                    for i, page in enumerate(reader.pages):
+                        # Extract regular text
+                        text = page.extract_text()
+                        if text.strip():
+                            text_parts.append(f"Page {i + 1}:\n{text}")
+                        
+                        # Extract images and perform OCR if available
+                        if hasattr(page, 'images') and DocumentExtractor._get_ocr_reader() is not None:
+                            for img_index, image in enumerate(page.images):
+                                try:
+                                    image_text = DocumentExtractor._extract_text_from_image_bytes(
+                                        image.data,
+                                        f"PDF page {i + 1} image {img_index + 1}"
+                                    )
+                                    if image_text.strip():
+                                        text_parts.append(
+                                            f"Page {i + 1} - Image {img_index + 1}:\n{image_text}"
+                                        )
+                                except Exception as e:
+                                    logger.debug(f"Could not extract text from image on page {i + 1}: {e}")
+                                
+                    return "\n".join(text_parts)
+        finally:
+            # Restore original logging level
+            pypdf_logger.setLevel(original_level)
 
     @staticmethod
     def _extract_html(file_path: Path) -> str:
