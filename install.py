@@ -491,6 +491,7 @@ def main():
             print("Configuration preserved")
         else:
             print("\nSetting up configuration...")
+            # Pass actual GPU status from setup, defaulting to True to auto-detect at runtime
             config = create_config(args.no_prompt, gpu_enabled=gpu_setup_result.get("gpu_enabled", True))
 
             with open(config_path, "w") as f:
@@ -527,7 +528,7 @@ def create_config(no_prompt: bool, gpu_enabled: bool = True) -> dict:
 
     Args:
         no_prompt: Use defaults without prompting
-        gpu_enabled: Enable GPU usage if available
+        gpu_enabled: Enable GPU usage when available (default True)
 
     Returns:
         Configuration dictionary

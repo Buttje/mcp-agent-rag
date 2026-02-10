@@ -49,7 +49,7 @@ class Config:
             "ollama_host": "http://localhost:11434",
             "log_level": "INFO",
             "max_context_length": 4000,
-            "gpu_enabled": True,  # Enable GPU usage if available
+            "gpu_enabled": True,  # Enable GPU usage when available (users can disable)
             "gpu_device": None,  # None = auto-detect, or specify device index
         }
 

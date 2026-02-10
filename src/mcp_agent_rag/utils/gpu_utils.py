@@ -16,7 +16,7 @@ class GPUInfo:
         self,
         available: bool = False,
         device_count: int = 0,
-        device_names: list[str] = None,
+        device_names: Optional[list[str]] = None,
         cuda_version: Optional[str] = None,
         driver_version: Optional[str] = None,
         pytorch_available: bool = False,
@@ -35,7 +35,7 @@ class GPUInfo:
         """
         self.available = available
         self.device_count = device_count
-        self.device_names = device_names or []
+        self.device_names = device_names if device_names is not None else []
         self.cuda_version = cuda_version
         self.driver_version = driver_version
         self.pytorch_available = pytorch_available
