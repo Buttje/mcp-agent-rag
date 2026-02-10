@@ -1,7 +1,7 @@
 """Semantic and structure-aware text chunking."""
 
 import re
-from typing import Dict, List, Tuple
+from typing import Dict, List, Optional, Tuple
 
 from mcp_agent_rag.utils import get_logger
 
