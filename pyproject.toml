@@ -39,6 +39,8 @@ dependencies = [
     "rarfile>=4.0",
     "Pillow>=10.2.0",
     "easyocr>=1.7.0",
+    "ollama>=0.6.0",
+    "openai>=2.0.0",
 ]
 
 [project.optional-dependencies]
