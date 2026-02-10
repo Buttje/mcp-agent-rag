@@ -309,10 +309,16 @@ def main():
         # We prefix it with "ollama:" to get the AGNO format (e.g., "ollama:mistral:7b-instruct")
         generative_model = config.get("generative_model", "mistral:7b-instruct")
         
+        # Handle both cases: model with or without "ollama:" prefix
+        if not generative_model.startswith("ollama:"):
+            model_string = f"ollama:{generative_model}"
+        else:
+            model_string = generative_model
+        
         # Initialize AGNO agent with Ollama model
         agent = Agent(
             name="MCP-RAG Assistant",
-            model=f"ollama:{generative_model}",
+            model=model_string,
             description="An AI assistant that can query document databases via MCP server",
             instructions=[
                 "You are a helpful AI assistant with access to document databases.",
@@ -336,6 +342,8 @@ def main():
     except Exception as e:
         logger.error(f"Failed to initialize agent: {e}", exc_info=True)
         print(f"Error: Failed to initialize agent: {e}", file=sys.stderr)
+        print(f"\nMake sure Ollama is running and the model '{model_string}' is available.", file=sys.stderr)
+        print(f"You can pull the model with: ollama pull {generative_model}", file=sys.stderr)
         mcp_client.close()
         sys.exit(1)
 
