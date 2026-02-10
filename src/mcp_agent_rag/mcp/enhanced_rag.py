@@ -184,6 +184,7 @@ class AgenticRAG:
     # Constants for text length limits
     MAX_CONTEXT_PREVIEW_LENGTH = 500  # Max length for context preview in iterations
     MAX_AUGMENTATION_CONTEXT_LENGTH = 2000  # Max context length for final augmentation
+    MAX_CONTEXT_ITEMS = 5  # Maximum number of previous items to include in context
 
     def __init__(
         self,
@@ -596,6 +597,23 @@ If you need more information to fully answer the question, use the query tools."
         else:
             return f"From {database}: {text}"
 
+    def _build_evaluation_prompt(self, original_prompt: str) -> str:
+        """Build prompt for LLM to evaluate information gaps.
+        
+        Args:
+            original_prompt: The original user question
+            
+        Returns:
+            Evaluation prompt string
+        """
+        return f"""Based on the information retrieved so far, evaluate:
+1. Do we have sufficient information to answer the original question: "{original_prompt}"?
+2. Are there any information gaps that need to be filled?
+3. What additional queries (if any) should we make?
+
+If the information is complete and you can answer the question, stop querying.
+If there are gaps or you need more specific information, use the query tools to retrieve it."""
+
     def get_context_with_llm(self, prompt: str, max_results: int = 5) -> Dict:
         """Get context using LLM-based agentic RAG flow.
         
@@ -652,7 +670,7 @@ If you need more information to fully answer the question, use the query tools."
                 # Format retrieved items with proper truncation
                 formatted_items = [
                     self._format_retrieved_item(item) 
-                    for item in all_retrieved_data[:5]  # Limit to 5 most recent items
+                    for item in all_retrieved_data[:self.MAX_CONTEXT_ITEMS]
                 ]
                 context = "Previously retrieved information:\n" + "\n\n".join(formatted_items)
             
@@ -710,13 +728,7 @@ If you need more information to fully answer the question, use the query tools."
                 break
             
             # Update prompt for next iteration (ask LLM to evaluate gaps)
-            current_prompt = f"""Based on the information retrieved so far, evaluate:
-1. Do we have sufficient information to answer the original question: "{prompt}"?
-2. Are there any information gaps that need to be filled?
-3. What additional queries (if any) should we make?
-
-If the information is complete and you can answer the question, stop querying.
-If there are gaps or you need more specific information, use the query tools to retrieve it."""
+            current_prompt = self._build_evaluation_prompt(prompt)
         
         # Build final context
         context_parts = []
