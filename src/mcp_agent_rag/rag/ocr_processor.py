@@ -52,8 +52,37 @@ class OCRProcessor:
             try:
                 import easyocr
 
+                # Check GPU availability and configuration
+                gpu_available = False
+                gpu_enabled = True  # Default to enabled
+                
+                # Try to load config to check GPU settings
+                try:
+                    from mcp_agent_rag.config import Config
+                    config = Config()
+                    gpu_enabled = config.get("gpu_enabled", True)
+                except Exception:
+                    # If config not available, just use auto-detection
+                    pass
+                
+                # Only use GPU if both available and enabled in config
+                if gpu_enabled:
+                    try:
+                        import torch
+                        gpu_available = torch.cuda.is_available()
+                    except ImportError:
+                        pass
+
                 logger.info("Initializing EasyOCR reader (this may take a moment)...")
-                _ocr_reader = easyocr.Reader(["en"], gpu=False, verbose=False)
+                if gpu_available and gpu_enabled:
+                    logger.info("GPU detected and enabled, using GPU acceleration for OCR")
+                    _ocr_reader = easyocr.Reader(["en"], gpu=True, verbose=False)
+                else:
+                    if not gpu_enabled:
+                        logger.info("GPU disabled in config, using CPU for OCR")
+                    else:
+                        logger.info("No GPU detected, using CPU for OCR")
+                    _ocr_reader = easyocr.Reader(["en"], gpu=False, verbose=False)
                 logger.info("EasyOCR reader initialized successfully")
             except Exception as e:
                 logger.error(f"Failed to initialize EasyOCR: {e}")

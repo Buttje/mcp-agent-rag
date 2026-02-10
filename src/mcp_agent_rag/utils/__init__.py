@@ -1,10 +1,18 @@
-"""Logging utilities for MCP-RAG."""
+"""Utilities for MCP-RAG."""
 
 import logging
 import sys
 from logging.handlers import RotatingFileHandler
 from pathlib import Path
 from typing import Optional
+
+from mcp_agent_rag.utils.gpu_utils import (
+    GPUInfo,
+    check_pytorch_installed,
+    detect_gpu,
+    get_gpu_installation_instructions,
+    recommend_pytorch_installation,
+)
 
 
 def setup_logger(

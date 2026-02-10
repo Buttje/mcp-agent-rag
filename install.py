@@ -116,6 +116,291 @@ def fetch_ollama_models(host: str, timeout: int = 5) -> tuple[list[str], list[st
         return [], [], f"Error fetching models: {str(e)}"
 
 
+def check_and_setup_gpu(python_path: Path, pip_path: Path, no_prompt: bool) -> dict:
+    """Check for GPU availability and optionally install PyTorch with GPU support.
+    
+    Args:
+        python_path: Path to Python executable
+        pip_path: Path to pip executable
+        no_prompt: Whether to skip prompts
+        
+    Returns:
+        Dictionary with setup results
+    """
+    result = {
+        "gpu_enabled": False,
+        "pytorch_installed": False,
+        "manual_install_needed": False,
+    }
+    
+    print("\nChecking for GPU availability...")
+    
+    # Check if PyTorch is already installed
+    pytorch_check = subprocess.run(
+        [str(python_path), "-c", "import torch; print(torch.__version__)"],
+        capture_output=True,
+        text=True,
+    )
+    
+    pytorch_already_installed = pytorch_check.returncode == 0
+    
+    if pytorch_already_installed:
+        print("✓ PyTorch is already installed")
+        
+        # Check CUDA availability
+        cuda_check = subprocess.run(
+            [str(python_path), "-c", "import torch; print(torch.cuda.is_available())"],
+            capture_output=True,
+            text=True,
+        )
+        
+        if cuda_check.returncode == 0 and "True" in cuda_check.stdout:
+            print("✓ CUDA is available - GPU support enabled")
+            result["gpu_enabled"] = True
+            result["pytorch_installed"] = True
+            return result
+        else:
+            print("○ PyTorch installed but CUDA not available")
+            if no_prompt:
+                print("  Continuing with CPU-only mode")
+                return result
+    else:
+        print("○ PyTorch not installed")
+    
+    # Check for NVIDIA GPU
+    nvidia_check = subprocess.run(
+        ["nvidia-smi", "--query-gpu=name,driver_version", "--format=csv,noheader"],
+        capture_output=True,
+        text=True,
+    )
+    
+    has_nvidia_gpu = nvidia_check.returncode == 0
+    
+    if has_nvidia_gpu:
+        print("\n✓ NVIDIA GPU detected:")
+        gpu_info_lines = nvidia_check.stdout.strip().split('\n')
+        for line in gpu_info_lines:
+            print(f"  {line}")
+        
+        # Check if CUDA toolkit is installed
+        cuda_available = _check_cuda_toolkit()
+        
+        if not cuda_available:
+            print("\n⚠ CUDA Toolkit not detected")
+            print("  GPU drivers are installed, but CUDA Toolkit is required for PyTorch GPU support")
+            
+            if no_prompt:
+                print("  Skipping GPU setup (--no-prompt specified)")
+                result["manual_install_needed"] = True
+                _print_gpu_install_instructions()
+                return result
+            
+            print("\nOptions:")
+            print("  1. Install PyTorch with CPU-only support (recommended for now)")
+            print("  2. View instructions for manual CUDA Toolkit installation")
+            print("  3. Skip PyTorch installation")
+            
+            choice = input("\nSelect option [1]: ").strip() or "1"
+            
+            if choice == "2":
+                _print_gpu_install_instructions()
+                result["manual_install_needed"] = True
+                print("\n⚠ Installation paused. Please install CUDA Toolkit and re-run installer.")
+                sys.exit(0)
+            elif choice == "3":
+                print("Skipping PyTorch installation")
+                return result
+            # Fall through to option 1
+        else:
+            print("✓ CUDA Toolkit detected")
+            
+            if no_prompt:
+                # Automatically install PyTorch with GPU support
+                print("\nInstalling PyTorch with CUDA support...")
+                return _install_pytorch_gpu(python_path, pip_path, result)
+            
+            print("\nDo you want to install PyTorch with GPU support?")
+            print("  This will enable GPU acceleration for image OCR processing")
+            choice = input("Install PyTorch with GPU support? [Y/n]: ").strip().lower()
+            
+            if choice in ['', 'y', 'yes']:
+                return _install_pytorch_gpu(python_path, pip_path, result)
+            else:
+                print("Skipping GPU setup - continuing with CPU-only mode")
+                return result
+    else:
+        print("\n○ No NVIDIA GPU detected")
+        
+        # Check for Apple Silicon
+        os_name = platform.system()
+        if os_name == "Darwin":
+            # Check for Apple Silicon
+            arch = platform.machine()
+            if arch == "arm64":
+                print("✓ Apple Silicon detected")
+                if not pytorch_already_installed:
+                    if no_prompt or input("Install PyTorch with MPS support? [Y/n]: ").strip().lower() in ['', 'y', 'yes']:
+                        return _install_pytorch_mps(python_path, pip_path, result)
+        
+        print("Continuing with CPU-only mode")
+    
+    return result
+
+
+def _check_cuda_toolkit() -> bool:
+    """Check if CUDA toolkit is installed.
+    
+    Returns:
+        True if CUDA toolkit is available
+    """
+    try:
+        # Try nvcc command
+        result = subprocess.run(
+            ["nvcc", "--version"],
+            capture_output=True,
+            text=True,
+            timeout=5,
+        )
+        return result.returncode == 0
+    except (FileNotFoundError, subprocess.TimeoutExpired):
+        return False
+
+
+def _install_pytorch_gpu(python_path: Path, pip_path: Path, result: dict) -> dict:
+    """Install PyTorch with GPU support.
+    
+    Args:
+        python_path: Path to Python executable
+        pip_path: Path to pip executable
+        result: Result dictionary to update
+        
+    Returns:
+        Updated result dictionary
+    """
+    print("\nInstalling PyTorch with CUDA support...")
+    print("This may take several minutes...")
+    
+    try:
+        subprocess.run(
+            [
+                str(pip_path),
+                "install",
+                "torch",
+                "torchvision",
+                "torchaudio",
+                "--index-url",
+                "https://download.pytorch.org/whl/cu121"
+            ],
+            check=True,
+        )
+        
+        print("✓ PyTorch with CUDA support installed successfully")
+        result["pytorch_installed"] = True
+        result["gpu_enabled"] = True
+        
+    except subprocess.CalledProcessError as e:
+        print(f"✗ Failed to install PyTorch: {e}")
+        print("  Continuing with CPU-only mode")
+    
+    return result
+
+
+def _install_pytorch_mps(python_path: Path, pip_path: Path, result: dict) -> dict:
+    """Install PyTorch with MPS support for Apple Silicon.
+    
+    Args:
+        python_path: Path to Python executable
+        pip_path: Path to pip executable
+        result: Result dictionary to update
+        
+    Returns:
+        Updated result dictionary
+    """
+    print("\nInstalling PyTorch with MPS support...")
+    print("This may take several minutes...")
+    
+    try:
+        subprocess.run(
+            [str(pip_path), "install", "torch", "torchvision", "torchaudio"],
+            check=True,
+        )
+        
+        print("✓ PyTorch with MPS support installed successfully")
+        result["pytorch_installed"] = True
+        result["gpu_enabled"] = True
+        
+    except subprocess.CalledProcessError as e:
+        print(f"✗ Failed to install PyTorch: {e}")
+        print("  Continuing with CPU-only mode")
+    
+    return result
+
+
+def _print_gpu_install_instructions():
+    """Print GPU installation instructions."""
+    os_name = platform.system()
+    
+    print("\n" + "=" * 70)
+    print("GPU DRIVER AND CUDA TOOLKIT INSTALLATION INSTRUCTIONS")
+    print("=" * 70)
+    
+    if os_name == "Linux":
+        print("""
+For NVIDIA GPUs on Linux:
+
+1. Install NVIDIA drivers:
+   # Ubuntu/Debian:
+   sudo add-apt-repository ppa:graphics-drivers/ppa
+   sudo apt update
+   sudo apt install nvidia-driver-535  # or latest version
+
+2. Install CUDA Toolkit:
+   # Download from: https://developer.nvidia.com/cuda-downloads
+   # Or use package manager:
+   sudo apt install nvidia-cuda-toolkit
+
+3. Reboot your system:
+   sudo reboot
+
+4. Verify installation:
+   nvidia-smi
+   nvcc --version
+
+5. Re-run this installer to install PyTorch with GPU support
+""")
+    elif os_name == "Windows":
+        print("""
+For NVIDIA GPUs on Windows:
+
+1. Download and install NVIDIA drivers:
+   Visit: https://www.nvidia.com/Download/index.aspx
+   Select your GPU model and download the driver
+
+2. Download and install CUDA Toolkit:
+   Visit: https://developer.nvidia.com/cuda-downloads
+   Download and run the installer for Windows
+
+3. Restart your computer
+
+4. Verify installation:
+   Open Command Prompt and run:
+   nvidia-smi
+   nvcc --version
+
+5. Re-run this installer to install PyTorch with GPU support
+""")
+    else:
+        print("""
+Please visit the following resources:
+
+- NVIDIA drivers: https://www.nvidia.com/Download/index.aspx
+- CUDA Toolkit: https://developer.nvidia.com/cuda-downloads
+- PyTorch installation: https://pytorch.org/get-started/locally/
+""")
+    
+    print("=" * 70)
+
+
 def main():
     """Main installation function."""
     parser = argparse.ArgumentParser(description="Install MCP-RAG")
@@ -179,6 +464,13 @@ def main():
     subprocess.run([str(pip_path), "install", "-e", ".[dev]"], cwd=project_root, check=True)
     print("Dependencies installed")
 
+    # Check for GPU and offer PyTorch installation
+    print("\n" + "=" * 60)
+    print("GPU Detection and PyTorch Setup")
+    print("=" * 60)
+    
+    gpu_setup_result = check_and_setup_gpu(python_path, pip_path, args.no_prompt)
+
     # Configuration
     config_path = Path.home() / ".mcp-agent-rag" / "config.json"
 
@@ -199,7 +491,8 @@ def main():
             print("Configuration preserved")
         else:
             print("\nSetting up configuration...")
-            config = create_config(args.no_prompt)
+            # Pass actual GPU status from setup, defaulting to True to auto-detect at runtime
+            config = create_config(args.no_prompt, gpu_enabled=gpu_setup_result.get("gpu_enabled", True))
 
             with open(config_path, "w") as f:
                 json.dump(config, f, indent=2)
@@ -216,13 +509,26 @@ def main():
         print(f"  1. Activate: source {venv_path}/bin/activate")
     print("  2. Run: mcp-rag --help")
     print(f"\nConfig file: {config_path}")
+    
+    # Display GPU setup summary
+    if gpu_setup_result.get("gpu_enabled"):
+        print("\n✓ GPU support enabled")
+        if gpu_setup_result.get("pytorch_installed"):
+            print("✓ PyTorch with GPU support installed")
+    elif gpu_setup_result.get("manual_install_needed"):
+        print("\n⚠ Manual GPU driver installation required")
+        print("  Please follow the instructions above and re-run the installer")
+    else:
+        print("\n○ CPU-only mode (GPU not available or not configured)")
 
 
-def create_config(no_prompt: bool) -> dict:
+
+def create_config(no_prompt: bool, gpu_enabled: bool = True) -> dict:
     """Create configuration interactively or with defaults.
 
     Args:
         no_prompt: Use defaults without prompting
+        gpu_enabled: Enable GPU usage when available (default True)
 
     Returns:
         Configuration dictionary
@@ -236,6 +542,8 @@ def create_config(no_prompt: bool) -> dict:
         "ollama_host": "http://localhost:11434",
         "log_level": "INFO",
         "max_context_length": 4000,
+        "gpu_enabled": gpu_enabled,
+        "gpu_device": None,
     }
 
     if no_prompt:
