@@ -369,7 +369,6 @@ def main():
             markdown=True,
             reasoning=True,  # Enable ReAct (Reasoning and Act) mechanism
             debug_mode=args.verbose,  # Enable debug mode for verbose output
-            show_tool_calls=args.verbose,  # Show tool calls in verbose mode
         )
 
         print("Agent initialized successfully!")
@@ -385,7 +384,7 @@ def main():
     except Exception as e:
         logger.error(f"Failed to initialize agent: {e}", exc_info=True)
         print(f"Error: Failed to initialize agent: {e}", file=sys.stderr)
-        print(f"\nMake sure Ollama is running and the model '{model_string}' is available.", file=sys.stderr)
+        print(f"\nMake sure Ollama is running and the model '{generative_model}' is available.", file=sys.stderr)
         print(f"You can pull the model with: ollama pull {generative_model}", file=sys.stderr)
         mcp_client.close()
         sys.exit(1)

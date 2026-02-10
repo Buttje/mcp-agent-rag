@@ -301,8 +301,7 @@ def test_chat_cli_main_with_verbose_flag(test_config, capsys):
                             captured = capsys.readouterr()
                             assert "🔍 Verbose mode enabled" in captured.out
 
-                            # Verify Agent was created with debug_mode and show_tool_calls
+                            # Verify Agent was created with debug_mode
                             MockAgent.assert_called_once()
                             call_kwargs = MockAgent.call_args[1]
                             assert call_kwargs.get("debug_mode") is True
-                            assert call_kwargs.get("show_tool_calls") is True
