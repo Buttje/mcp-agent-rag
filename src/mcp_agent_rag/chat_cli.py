@@ -360,16 +360,17 @@ def main():
             description="An AI assistant that can query document databases via MCP server",
             instructions=[
                 "You are a helpful AI assistant with access to document databases.",
-                "When users ask questions, use the query_data tool to search relevant information.",
+                "When users ask questions, use the query_data tool to search relevant "
+                "information.",
                 "Provide clear, accurate answers based on the retrieved context.",
                 "Always cite your sources when providing information from the databases.",
-                "Think step by step about what information you need and how to answer the question.",
+                "Think step by step about what information you need and how to answer "
+                "the question.",
             ],
             tools=[query_tool],
             markdown=True,
             reasoning=True,  # Enable ReAct (Reasoning and Act) mechanism
             debug_mode=args.verbose,  # Enable debug mode for verbose output
-            show_tool_calls=args.verbose,  # Show tool calls in verbose mode
         )
 
         print("Agent initialized successfully!")
@@ -385,7 +386,11 @@ def main():
     except Exception as e:
         logger.error(f"Failed to initialize agent: {e}", exc_info=True)
         print(f"Error: Failed to initialize agent: {e}", file=sys.stderr)
-        print(f"\nMake sure Ollama is running and the model '{model_string}' is available.", file=sys.stderr)
+        print(
+            f"\nMake sure Ollama is running and the model '{generative_model}' is "
+            "available.",
+            file=sys.stderr,
+        )
         print(f"You can pull the model with: ollama pull {generative_model}", file=sys.stderr)
         mcp_client.close()
         sys.exit(1)
