@@ -1,13 +1,12 @@
 """GPU detection and configuration utilities."""
 
+import logging
 import platform
 import subprocess
 from pathlib import Path
 from typing import Optional
 
-from mcp_agent_rag.utils import get_logger
-
-logger = get_logger(__name__)
+logger = logging.getLogger(__name__)
 
 
 class GPUInfo:

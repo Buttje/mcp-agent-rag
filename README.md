@@ -19,12 +19,14 @@ A Python implementation of a Model Context Protocol (MCP) server that provides r
 - **CLI Interface**: Easy-to-use command-line tools for database and server management
 - **Cross-Platform**: Works on Windows 10/11 and Ubuntu 22.04 LTS
 - **Comprehensive Testing**: 350+ tests with 73%+ coverage
+- **GPU Acceleration**: Optional GPU support for faster OCR processing with automatic detection and setup
 
 ## Requirements
 
 - Python 3.10 or higher
 - Ollama (for embeddings and generation)
 - ~1GB disk space for models
+- Optional: NVIDIA GPU with CUDA support for accelerated OCR processing
 
 ## Installation
 
@@ -56,6 +58,85 @@ Pull required models:
 ollama pull nomic-embed-text
 ollama pull mistral:7b-instruct
 ```
+
+### GPU Support (Optional)
+
+The installer automatically detects GPU availability and offers to install PyTorch with GPU support for accelerated OCR processing.
+
+#### Automatic GPU Detection
+
+When you run `python install.py`, the installer will:
+
+1. **Detect GPU Hardware**: Check for NVIDIA GPUs using `nvidia-smi`
+2. **Check CUDA Toolkit**: Verify if CUDA toolkit is installed
+3. **Offer PyTorch Installation**: Prompt to install PyTorch with CUDA support if GPU is available
+4. **Provide Instructions**: Display step-by-step instructions if manual driver installation is needed
+
+#### Manual GPU Setup
+
+If you need to install GPU drivers manually:
+
+**For NVIDIA GPUs on Linux:**
+```bash
+# Install NVIDIA drivers
+sudo add-apt-repository ppa:graphics-drivers/ppa
+sudo apt update
+sudo apt install nvidia-driver-535  # or latest version
+
+# Install CUDA Toolkit
+sudo apt install nvidia-cuda-toolkit
+
+# Reboot
+sudo reboot
+
+# Verify installation
+nvidia-smi
+nvcc --version
+
+# Re-run installer to install PyTorch with GPU support
+python install.py
+```
+
+**For NVIDIA GPUs on Windows:**
+1. Download NVIDIA drivers from [nvidia.com/Download/index.aspx](https://www.nvidia.com/Download/index.aspx)
+2. Download CUDA Toolkit from [developer.nvidia.com/cuda-downloads](https://developer.nvidia.com/cuda-downloads)
+3. Install both and restart your computer
+4. Re-run `python install.py` to install PyTorch with GPU support
+
+**For Apple Silicon (M1/M2/M3) Macs:**
+```bash
+# PyTorch with MPS (Metal Performance Shaders) support is automatically installed
+# No additional drivers needed
+```
+
+#### GPU Configuration
+
+GPU usage is enabled by default when available. You can configure it in `~/.mcp-agent-rag/config.json`:
+
+```json
+{
+  "gpu_enabled": true,
+  "gpu_device": null
+}
+```
+
+- `gpu_enabled`: Set to `true` to enable GPU usage, `false` to force CPU-only mode
+- `gpu_device`: Set to a specific GPU index (e.g., 0, 1) or `null` for automatic selection
+
+#### Performance Benefits
+
+With GPU acceleration:
+- **OCR Processing**: 3-10x faster text extraction from images
+- **Large Documents**: Faster processing of PDFs and documents with embedded images
+- **Batch Operations**: Significantly improved throughput when adding multiple documents
+
+#### Troubleshooting
+
+If GPU is not being detected:
+1. Verify drivers are installed: `nvidia-smi`
+2. Check CUDA toolkit: `nvcc --version`
+3. Test PyTorch: `python -c "import torch; print(torch.cuda.is_available())"`
+4. Check logs for GPU detection messages during OCR initialization
 
 ## Usage
 
