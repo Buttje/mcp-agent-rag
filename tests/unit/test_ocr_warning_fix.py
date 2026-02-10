@@ -401,10 +401,10 @@ class TestOCRWarningFix:
             extractor_module._ocr_reader = original_reader
 
     def test_extract_text_from_image_bytes_converts_mode(self):
-        """Test that image bytes extraction converts non-RGB images."""
+        """Test that image bytes extraction converts CMYK images."""
         from io import BytesIO
         
-        # Create test image with RGBA mode
+        # Create test image with CMYK mode
         img = Image.new('CMYK', (100, 100), color=(0, 0, 0, 0))
         img_bytes = BytesIO()
         img.save(img_bytes, format='JPEG')
