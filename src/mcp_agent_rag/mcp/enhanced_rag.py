@@ -672,6 +672,11 @@ If there are gaps or you need more specific information, use the query tools to 
         """
         logger.info("Starting LLM-based agentic RAG flow")
         
+        # Debug logging: log user prompt
+        debug_logger = get_debug_logger()
+        if debug_logger:
+            debug_logger.log_user_prompt(prompt)
+        
         # Build tool definitions for databases
         tools = self._build_database_tools()
         
@@ -684,6 +689,22 @@ If there are gaps or you need more specific information, use the query tools to 
                 "average_confidence": 0.0,
                 "iterations": 0,
             }
+        
+        # Debug logging: log database capabilities (internal tools)
+        if debug_logger:
+            debug_logger.log(
+                "agent.tools",
+                "Internal database tools created (Database Capabilities):",
+                {
+                    "tool_count": len(tools),
+                    "tools": [
+                        {
+                            "name": t["function"]["name"],
+                            "description": t["function"]["description"]
+                        } for t in tools
+                    ]
+                }
+            )
         
         # Build system prompt
         system_prompt = self._build_system_prompt(tools)
@@ -702,6 +723,13 @@ If there are gaps or you need more specific information, use the query tools to 
             iteration += 1
             logger.info(f"LLM-based RAG iteration {iteration}/{self.max_iterations}")
             
+            # Debug logging: log iteration start
+            if debug_logger:
+                debug_logger.log_thinking_step(
+                    f"iteration_{iteration}",
+                    f"Starting iteration {iteration}/{self.max_iterations}"
+                )
+            
             # Build context from previous retrievals
             context = ""
             if all_retrieved_data:
@@ -711,6 +739,14 @@ If there are gaps or you need more specific information, use the query tools to 
                     for item in all_retrieved_data[:self.MAX_CONTEXT_ITEMS]
                 ]
                 context = "Previously retrieved information:\n" + "\n\n".join(formatted_items)
+            
+            # Debug logging: log LLM request
+            if debug_logger:
+                debug_logger.log_llm_request(
+                    model=self.config.get("generative_model", "mistral:7b-instruct"),
+                    prompt=current_prompt,
+                    context=context
+                )
             
             # Call LLM with tools
             response = self.generator.generate_with_tools(
@@ -724,17 +760,55 @@ If there are gaps or you need more specific information, use the query tools to 
                 logger.error("Failed to get LLM response")
                 break
             
+            # Debug logging: log LLM response with tool calls
+            if debug_logger:
+                debug_logger.log(
+                    "llm.response",
+                    f"LLM response (iteration {iteration}):",
+                    {
+                        "response_text": response.get("text", ""),
+                        "tool_calls_count": len(response.get("tool_calls", [])),
+                        "tool_calls": response.get("tool_calls", [])
+                    }
+                )
+            
             tool_calls = response.get("tool_calls", [])
             
             # If no tool calls, LLM thinks it has enough information
             if not tool_calls:
                 logger.info("LLM did not request more information")
+                if debug_logger:
+                    debug_logger.log_thinking_step(
+                        f"iteration_{iteration}_complete",
+                        "LLM determined it has enough information, stopping iteration"
+                    )
                 break
             
             # Execute tool calls
             new_data_retrieved = False
             for tool_call in tool_calls:
+                # Debug logging: log tool execution
+                if debug_logger:
+                    debug_logger.log(
+                        "agent.tool_execution",
+                        f"Executing internal tool call:",
+                        tool_call
+                    )
+                
                 result = self._execute_tool_call(tool_call, max_results)
+                
+                # Debug logging: log tool result
+                if debug_logger:
+                    debug_logger.log(
+                        "agent.tool_result",
+                        f"Tool execution result:",
+                        {
+                            "database": result.get("database", ""),
+                            "query": result.get("query", ""),
+                            "result_count": result.get("count", 0),
+                            "error": result.get("error")
+                        }
+                    )
                 
                 if "error" in result:
                     logger.error(f"Tool execution error: {result['error']}")
@@ -763,6 +837,11 @@ If there are gaps or you need more specific information, use the query tools to 
             # If no new data was retrieved, stop
             if not new_data_retrieved:
                 logger.info("No new data retrieved, stopping iteration")
+                if debug_logger:
+                    debug_logger.log_thinking_step(
+                        f"iteration_{iteration}_no_data",
+                        "No new data retrieved from tool calls, stopping iteration"
+                    )
                 break
             
             # Update prompt for next iteration (ask LLM to evaluate gaps)
@@ -816,12 +895,32 @@ Retrieved information:
 
 Create a concise, well-supported augmentation that helps answer the question."""
             
+            # Debug logging: log final augmentation request
+            if debug_logger:
+                debug_logger.log_llm_request(
+                    model=self.config.get("generative_model", "mistral:7b-instruct"),
+                    prompt=augmentation_prompt,
+                    context=truncated_context
+                )
+            
             augmentation = self.generator.generate(augmentation_prompt, "")
+            
+            # Debug logging: log augmentation response
+            if debug_logger:
+                debug_logger.log_llm_response(
+                    model=self.config.get("generative_model", "mistral:7b-instruct"),
+                    response=augmentation or ""
+                )
+            
             if augmentation:
                 enriched_context = f"Context augmentation:\n{augmentation}\n\nDetailed information:\n{final_context}"
                 final_context = enriched_context
         
         logger.info(f"Completed LLM-based RAG flow: {iteration} iterations, {len(all_citations)} citations")
+        
+        # Debug logging: log final augmented prompt
+        if debug_logger:
+            debug_logger.log_augmented_prompt(prompt=prompt, context=final_context)
         
         return {
             "text": final_context,

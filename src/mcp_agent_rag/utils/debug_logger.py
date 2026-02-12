@@ -306,3 +306,20 @@ def get_debug_logger() -> Optional[DebugLogger]:
         DebugLogger instance or None if not initialized
     """
     return _debug_logger
+
+
+def log_if_debug(log_func, *args, **kwargs):
+    """Helper function to log only if debug logger is enabled.
+    
+    Usage:
+        log_if_debug(lambda d: d.log_user_prompt(prompt))
+        log_if_debug(lambda d: d.log("module", "message", data))
+    
+    Args:
+        log_func: Function that takes DebugLogger instance and performs logging
+        *args: Additional positional arguments (not typically used)
+        **kwargs: Additional keyword arguments (not typically used)
+    """
+    debug_logger = get_debug_logger()
+    if debug_logger:
+        log_func(debug_logger)

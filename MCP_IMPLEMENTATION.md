@@ -3,6 +3,37 @@
 ## Overview
 This document summarizes the implementation of the Model Context Protocol (MCP) specification (2025-11-25) for the mcp-agent-rag repository.
 
+## Architecture
+
+### LLM-Based Agentic RAG Flow
+The MCP server implements a sophisticated **LLM-based agentic retrieval** system where:
+
+1. **Internal Tools Creation**: On initialization, the server creates "Internal Tools" for each activated database
+   - Each tool represents a query capability for a specific database
+   - Tools include database name, description, and document count
+   - These tools are collectively referred to as "Database Capabilities"
+
+2. **Iterative Retrieval Process**: When `getInformationFor()` or `getInformationForDB()` is called:
+   - Server starts a new agentic session
+   - Combines user prompt with Database Capabilities
+   - Sends this to the LLM (hosted on Ollama server)
+   - LLM decides which internal tools to call and with what queries
+   - Server executes the tool calls, querying RAG databases
+   - Results are returned to the LLM
+   - **Iteration Loop**: LLM can request more information until it determines it has enough
+   - Final LLM response is returned to the MCP Host
+
+3. **Model Requirements**: The server checks that the generative model supports:
+   - **`tools` capability** (required): Enables LLM to call internal database query tools
+   - **`thinking` capability** (recommended): Improves reasoning quality
+
+4. **Debug Logging**: When `--debug` flag is provided:
+   - All JSON-RPC requests/responses are logged
+   - LLM requests/responses and tool calls are logged
+   - Database queries and retrieved data are logged
+   - LLM thinking process is tracked
+   - Logs saved to `~/.mcp-agent-rag/debug/debug_<timestamp>.log`
+
 ## Implemented Features
 
 ### 1. Required MCP Tools
@@ -14,24 +45,36 @@ All three required tools have been implemented according to the specification:
 - **Returns**: 
   - `databases`: Array of database objects with name, description, doc_count, last_updated, path
   - `count`: Total number of active databases
-- **Location**: `src/mcp_agent_rag/mcp/server.py:186-203`
+- **Implementation**: Simple direct query - no LLM involved
+- **Location**: `src/mcp_agent_rag/mcp/server.py`
 - **Tests**: 3 comprehensive tests in `tests/unit/test_mcp_tools.py`
 
 #### getInformationFor(Prompt)
-- **Purpose**: Returns information by scanning all activated databases
+- **Purpose**: Returns information by querying all activated databases using LLM-based agentic retrieval
+- **Architecture**: 
+  - Creates internal tools for all active databases
+  - LLM iteratively queries databases using these tools
+  - Returns LLM's final synthesized response
 - **Parameters**: 
   - `prompt` (required): Query string
   - `max_results` (optional): Maximum results per database (default: 5)
 - **Returns**: 
   - `prompt`: Original query
-  - `context`: Aggregated text from all databases
-  - `citations`: Array of source citations
+  - `context`: Final LLM-augmented response with retrieved context
+  - `citations`: Array of source citations with confidence scores
   - `databases_searched`: List of databases queried
-- **Location**: `src/mcp_agent_rag/mcp/server.py:205-230`
+  - `average_confidence`: Average confidence of retrieved results
+  - `iterations`: Number of LLM iterations performed
+  - `min_confidence_threshold`: Minimum confidence threshold (default: 0.85)
+- **Location**: `src/mcp_agent_rag/mcp/server.py`
 - **Tests**: 5 comprehensive tests in `tests/unit/test_mcp_tools.py`
 
 #### getInformationForDB(Prompt, DatabaseName)
-- **Purpose**: Returns information by scanning specific named database
+- **Purpose**: Returns information by querying a specific database using LLM-based agentic retrieval
+- **Architecture**: 
+  - Creates a temporary agentic RAG instance with only the selected database
+  - LLM iteratively queries this specific database using internal tools
+  - Returns LLM's final synthesized response
 - **Parameters**: 
   - `prompt` (required): Query string
   - `database_name` (required): Name of database to search
@@ -39,9 +82,13 @@ All three required tools have been implemented according to the specification:
 - **Returns**: 
   - `prompt`: Original query
   - `database`: Database name queried
-  - `context`: Text from specified database
-  - `citations`: Array of source citations
-- **Location**: `src/mcp_agent_rag/mcp/server.py:232-310`
+  - `context`: Final LLM-augmented response from specific database
+  - `citations`: Array of source citations with confidence scores
+  - `average_confidence`: Average confidence of retrieved results
+  - `iterations`: Number of LLM iterations performed
+  - `min_confidence_threshold`: Minimum confidence threshold (default: 0.85)
+- **Validation**: Checks if database_name is in active databases, returns error if not
+- **Location**: `src/mcp_agent_rag/mcp/server.py`
 - **Tests**: 9 comprehensive tests including edge cases in `tests/unit/test_mcp_tools.py`
 
 ### 2. Transport Protocols
