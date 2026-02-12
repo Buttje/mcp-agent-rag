@@ -223,11 +223,7 @@ def check_and_setup_gpu(python_path: Path, pip_path: Path, no_prompt: bool) -> d
             print("  2. View instructions for manual CUDA Toolkit installation")
             print("  3. Skip PyTorch installation")
 
-            try:
-                choice = safe_input("\nSelect option [1]: ", "1") or "1"
-            except Exception:
-                print("\nUsing default option [1]")
-                choice = "1"
+            choice = safe_input("\nSelect option [1]: ", "1") or "1"
 
             if choice == "2":
                 _print_gpu_install_instructions()
@@ -248,11 +244,7 @@ def check_and_setup_gpu(python_path: Path, pip_path: Path, no_prompt: bool) -> d
 
             print("\nDo you want to install PyTorch with GPU support?")
             print("  This will enable GPU acceleration for image OCR processing")
-            try:
-                choice = safe_input("Install PyTorch with GPU support? [Y/n]: ", "n").lower()
-            except Exception:
-                print("\nSkipping GPU setup")
-                choice = "n"
+            choice = safe_input("Install PyTorch with GPU support? [Y/n]: ", "n").lower()
 
             if choice in ['', 'y', 'yes']:
                 return _install_pytorch_gpu(python_path, pip_path, result)
@@ -271,11 +263,7 @@ def check_and_setup_gpu(python_path: Path, pip_path: Path, no_prompt: bool) -> d
                 print("✓ Apple Silicon detected")
                 if not pytorch_already_installed:
                     prompt = "Install PyTorch with MPS support? [Y/n]: "
-                    try:
-                        user_input = safe_input(prompt, 'n').lower() if not no_prompt else 'y'
-                    except Exception:
-                        print("\nSkipping MPS setup")
-                        user_input = 'n'
+                    user_input = safe_input(prompt, 'n').lower() if not no_prompt else 'y'
                     if no_prompt or user_input in ['', 'y', 'yes']:
                         return _install_pytorch_mps(python_path, pip_path, result)
 
