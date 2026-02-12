@@ -12,6 +12,7 @@ from urllib.parse import parse_qs, urlparse
 from mcp_agent_rag.config import Config
 from mcp_agent_rag.database import DatabaseManager
 from mcp_agent_rag.mcp.enhanced_rag import AgenticRAG as TrueAgenticRAG
+from mcp_agent_rag.rag.ollama_utils import get_model_capabilities
 from mcp_agent_rag.utils import get_debug_logger, get_logger
 
 logger = get_logger(__name__)
@@ -81,6 +82,34 @@ class MCPServer:
         # Initialize agentic RAG with LLM-based iterative retrieval
         # This creates internal database query tools that the LLM can call iteratively
         self.agent = TrueAgenticRAG(config, self.loaded_databases)
+        
+        # Check if the generative model supports required capabilities (tools and thinking)
+        generative_model = config.get("generative_model", "mistral:7b-instruct")
+        ollama_host = config.get("ollama_host", "http://localhost:11434")
+        
+        capabilities, error = get_model_capabilities(generative_model, ollama_host)
+        if error:
+            logger.warning(f"Could not verify model capabilities for '{generative_model}': {error}")
+            logger.warning("Server will continue but LLM-based agentic retrieval may not work correctly")
+        else:
+            # Check for tools capability (required for iterative retrieval)
+            if "tools" not in capabilities:
+                logger.warning(
+                    f"Model '{generative_model}' does not support 'tools' capability. "
+                    f"LLM-based agentic retrieval requires a model with tool calling support. "
+                    f"Supported capabilities: {capabilities}"
+                )
+            else:
+                logger.info(f"Model '{generative_model}' supports tools capability ✓")
+            
+            # Check for thinking capability (optional but recommended)
+            if "thinking" in capabilities:
+                logger.info(f"Model '{generative_model}' supports thinking capability ✓")
+            else:
+                logger.info(
+                    f"Model '{generative_model}' does not support 'thinking' capability. "
+                    f"Consider using a model with thinking support for better results."
+                )
 
     def _initialize(self, params: Dict) -> Dict:
         """Handle initialize request - required by MCP specification.
@@ -282,22 +311,39 @@ class MCPServer:
         return {"databases": result}
 
     def _query_data(self, params: Dict) -> Dict:
-        """Handle query-get_data."""
+        """Handle query-get_data.
+        
+        Uses LLM-based agentic RAG flow where the LLM iteratively queries
+        databases using internal tools until it has enough information.
+        """
         prompt = params.get("prompt")
         if not prompt:
             raise ValueError("Missing required parameter: prompt")
 
         max_results = params.get("max_results", 5)
 
-        # Use agentic RAG to get context
+        # Use LLM-based agentic RAG to get context
+        # The LLM will create internal tool calls to query databases iteratively
         context = self.agent.get_context(prompt, max_results)
 
-        return {
+        result = {
             "prompt": prompt,
             "context": context["text"],
             "citations": context["citations"],
             "databases_searched": context["databases_searched"],
+            "average_confidence": context.get("average_confidence", 0.0),
+            "iterations": context.get("iterations", 0),
         }
+        
+        # Debug logging: log final response
+        debug_logger = get_debug_logger()
+        if debug_logger:
+            debug_logger.log_final_response(
+                response=context["text"],
+                citations=context["citations"]
+            )
+        
+        return result
 
     def _get_databases(self, params: Dict) -> Dict:
         """Handle getDatabases - returns list of activated databases.
