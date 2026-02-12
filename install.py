@@ -21,6 +21,23 @@ EMBEDDING_MODEL_PATTERNS = [
 ]
 
 
+def safe_input(prompt: str, default: str = "") -> str:
+    """Safely get user input with error handling.
+    
+    Args:
+        prompt: The prompt to display to the user
+        default: Default value to return if input fails
+        
+    Returns:
+        User input or default value
+    """
+    try:
+        return input(prompt).strip()
+    except (EOFError, KeyboardInterrupt):
+        print(f"\nNo input received, using default: {default}")
+        return default
+
+
 def normalize_host(host: str) -> str:
     """Normalize Ollama host URL.
 
@@ -206,7 +223,7 @@ def check_and_setup_gpu(python_path: Path, pip_path: Path, no_prompt: bool) -> d
             print("  2. View instructions for manual CUDA Toolkit installation")
             print("  3. Skip PyTorch installation")
 
-            choice = input("\nSelect option [1]: ").strip() or "1"
+            choice = safe_input("\nSelect option [1]: ", "1") or "1"
 
             if choice == "2":
                 _print_gpu_install_instructions()
@@ -227,7 +244,7 @@ def check_and_setup_gpu(python_path: Path, pip_path: Path, no_prompt: bool) -> d
 
             print("\nDo you want to install PyTorch with GPU support?")
             print("  This will enable GPU acceleration for image OCR processing")
-            choice = input("Install PyTorch with GPU support? [Y/n]: ").strip().lower()
+            choice = safe_input("Install PyTorch with GPU support? [Y/n]: ", "n").lower()
 
             if choice in ['', 'y', 'yes']:
                 return _install_pytorch_gpu(python_path, pip_path, result)
@@ -246,7 +263,8 @@ def check_and_setup_gpu(python_path: Path, pip_path: Path, no_prompt: bool) -> d
                 print("✓ Apple Silicon detected")
                 if not pytorch_already_installed:
                     prompt = "Install PyTorch with MPS support? [Y/n]: "
-                    if no_prompt or input(prompt).strip().lower() in ['', 'y', 'yes']:
+                    user_input = safe_input(prompt, 'n').lower() if not no_prompt else 'y'
+                    if no_prompt or user_input in ['', 'y', 'yes']:
                         return _install_pytorch_mps(python_path, pip_path, result)
 
         print("Continuing with CPU-only mode")
@@ -587,7 +605,7 @@ def create_config(no_prompt: bool, gpu_enabled: bool = True) -> dict:
     # Ollama host - ask first before fetching models
     print("\n1. Ollama Server Configuration")
     print("-" * 40)
-    ollama_host = input(f"Ollama host URL [{config['ollama_host']}]: ").strip()
+    ollama_host = safe_input(f"Ollama host URL [{config['ollama_host']}]: ", "")
     if ollama_host:
         config["ollama_host"] = ollama_host
 
@@ -624,7 +642,7 @@ def create_config(no_prompt: bool, gpu_enabled: bool = True) -> dict:
             default_marker = " (default)" if model == config['embedding_model'] else ""
             print(f"  {i}. {model}{default_marker}")
 
-        choice = input("Select embedding model [1]: ").strip() or "1"
+        choice = safe_input("Select embedding model [1]: ", "1") or "1"
         try:
             idx = int(choice) - 1
             if 0 <= idx < len(embedding_models):
@@ -637,7 +655,7 @@ def create_config(no_prompt: bool, gpu_enabled: bool = True) -> dict:
         print("  1. nomic-embed-text (default)")
         print("  2. mxbai-embed-large")
         print("  3. all-minilm")
-        choice = input("Select embedding model [1]: ").strip() or "1"
+        choice = safe_input("Select embedding model [1]: ", "1") or "1"
         if choice == "2":
             config["embedding_model"] = "mxbai-embed-large"
         elif choice == "3":
@@ -652,7 +670,7 @@ def create_config(no_prompt: bool, gpu_enabled: bool = True) -> dict:
             default_marker = " (default)" if model == config['generative_model'] else ""
             print(f"  {i}. {model}{default_marker}")
 
-        choice = input("Select generative model [1]: ").strip() or "1"
+        choice = safe_input("Select generative model [1]: ", "1") or "1"
         try:
             idx = int(choice) - 1
             if 0 <= idx < len(generative_models):
@@ -665,7 +683,7 @@ def create_config(no_prompt: bool, gpu_enabled: bool = True) -> dict:
         print("  1. mistral:7b-instruct (default, Apache 2.0)")
         print("  2. llama3.2 (Meta license)")
         print("  3. gemma2 (Google)")
-        choice = input("Select generative model [1]: ").strip() or "1"
+        choice = safe_input("Select generative model [1]: ", "1") or "1"
         if choice == "2":
             config["generative_model"] = "llama3.2"
         elif choice == "3":
@@ -674,7 +692,7 @@ def create_config(no_prompt: bool, gpu_enabled: bool = True) -> dict:
     # Chunk size
     print("\n4. Text Processing Configuration")
     print("-" * 40)
-    chunk_size = input(f"Chunk size [{config['chunk_size']}]: ").strip()
+    chunk_size = safe_input(f"Chunk size [{config['chunk_size']}]: ", "")
     if chunk_size:
         try:
             config["chunk_size"] = int(chunk_size)
@@ -682,7 +700,7 @@ def create_config(no_prompt: bool, gpu_enabled: bool = True) -> dict:
             print(f"Invalid value, using default: {config['chunk_size']}")
 
     # Chunk overlap
-    chunk_overlap = input(f"Chunk overlap [{config['chunk_overlap']}]: ").strip()
+    chunk_overlap = safe_input(f"Chunk overlap [{config['chunk_overlap']}]: ", "")
     if chunk_overlap:
         try:
             config["chunk_overlap"] = int(chunk_overlap)
@@ -693,4 +711,13 @@ def create_config(no_prompt: bool, gpu_enabled: bool = True) -> dict:
 
 
 if __name__ == "__main__":
-    main()
+    try:
+        main()
+    except KeyboardInterrupt:
+        print("\n\nInstallation cancelled by user.")
+        sys.exit(1)
+    except Exception as e:
+        print(f"\n\nError during installation: {e}", file=sys.stderr)
+        import traceback
+        traceback.print_exc()
+        sys.exit(1)
