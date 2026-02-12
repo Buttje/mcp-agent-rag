@@ -38,6 +38,10 @@ class Colors:
     BG_YELLOW = "\033[103m"
 
 
+# Configuration constants
+CONTEXT_PREVIEW_LENGTH = 150  # Number of characters to show in context preview
+
+
 # Confidence thresholds for color coding
 CONFIDENCE_HIGH = 0.95  # Green
 CONFIDENCE_GOOD = 0.90  # Cyan
@@ -184,7 +188,7 @@ class MCPClient:
                 log_result = {}
                 if "context" in result:
                     context = result["context"]
-                    context_preview = context[:150] + "..." if len(context) > 150 else context
+                    context_preview = context[:CONTEXT_PREVIEW_LENGTH] + "..." if len(context) > CONTEXT_PREVIEW_LENGTH else context
                     log_result["context_preview"] = context_preview
                     log_result["context_length"] = len(context)
                     log_result["citations"] = result.get("citations", [])
@@ -204,7 +208,7 @@ class MCPClient:
                 if "context" in result:
                     context = result["context"]
                     context_len = len(context)
-                    context_preview = context[:150] + "..." if context_len > 150 else context
+                    context_preview = context[:CONTEXT_PREVIEW_LENGTH] + "..." if context_len > CONTEXT_PREVIEW_LENGTH else context
                     
                     avg_conf = result.get("average_confidence")
                     conf_str = ""
