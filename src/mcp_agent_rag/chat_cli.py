@@ -3,6 +3,7 @@
 import json
 import subprocess
 import sys
+import threading
 import time
 from typing import Any
 
@@ -94,6 +95,46 @@ class MCPClient:
         self.request_id = 0
         self.logger = get_logger(__name__)
 
+    def initialize(self, protocol_version: str = "2025-11-25",
+                   capabilities: dict[str, Any] | None = None) -> None:
+        """Perform MCP initialize handshake and send initialized notification.
+        
+        Args:
+            protocol_version: MCP protocol version to use
+            capabilities: Client capabilities dictionary (optional)
+        """
+        self.request_id += 1
+        init_request = {
+            "jsonrpc": "2.0",
+            "id": self.request_id,
+            "method": "initialize",
+            "params": {
+                "protocolVersion": protocol_version,
+                "capabilities": capabilities or {},
+                "clientInfo": {
+                    "name": "mcp-rag-cli",
+                    "title": "MCP-RAG CLI",
+                    "version": "1.0.0",
+                    "description": "Interactive chat client for mcp-agent-rag",
+                },
+            },
+        }
+        # write and flush request
+        self.process.stdin.write((json.dumps(init_request) + "\n"))
+        self.process.stdin.flush()
+        # read the server's reply
+        response_line = self.process.stdout.readline().strip()
+        response = json.loads(response_line)
+        if "error" in response:
+            raise RuntimeError(f"MCP initialize error: {response['error']}")
+        # after successful init, send the initialized notification (no id)
+        notification = {
+            "jsonrpc": "2.0",
+            "method": "notifications/initialized",
+        }
+        self.process.stdin.write((json.dumps(notification) + "\n"))
+        self.process.stdin.flush()
+
     def call_tool(self, tool_name: str, arguments: dict[str, Any]) -> dict[str, Any]:
         """Call a tool on the MCP server.
 
@@ -113,14 +154,13 @@ class MCPClient:
         }
 
         try:
-            # Send request with explicit UTF-8 encoding
+            # Send request (text mode, no encoding needed)
             request_json = json.dumps(request) + "\n"
-            self.process.stdin.write(request_json.encode('utf-8'))
+            self.process.stdin.write(request_json)
             self.process.stdin.flush()
 
-            # Read response line by line with explicit UTF-8 decoding
-            # to handle special characters correctly
-            response_line = self.process.stdout.readline().decode('utf-8').strip()
+            # Read response line by line (text mode, no decoding needed)
+            response_line = self.process.stdout.readline().strip()
             if not response_line:
                 raise ConnectionError("MCP server closed connection")
 
@@ -204,16 +244,24 @@ def start_mcp_server(config: Config, active_databases: list[str], debug: bool = 
             stdin=subprocess.PIPE,
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
-            # No bufsize specified - use default buffering which works correctly
-            # with binary mode pipes and avoids RuntimeWarning
+            text=True,          # decode stdout/stderr to str automatically
+            encoding="utf-8",
+            bufsize=1,          # line buffered
         )
+
+        # Start a daemon thread to read stderr to avoid blocking the server when logs are generated
+        def _drain_stderr(pipe, log):
+            for line in iter(pipe.readline, ''):
+                log.error(f"[server] {line.rstrip()}")
+
+        threading.Thread(target=_drain_stderr, args=(process.stderr, logger), daemon=True).start()
 
         # Give server time to start
         time.sleep(1)
 
         # Check if process is still running
         if process.poll() is not None:
-            stderr = process.stderr.read().decode('utf-8')
+            stderr = process.stderr.read()
             raise RuntimeError(f"MCP server failed to start: {stderr}")
 
         logger.info("MCP server started successfully")
@@ -339,6 +387,14 @@ def main():
     except Exception as e:
         logger.error(f"Failed to start MCP server: {e}", exc_info=True)
         print(f"Error: Failed to start MCP server: {e}", file=sys.stderr)
+        sys.exit(1)
+
+    try:
+        # Perform MCP initialization handshake
+        mcp_client.initialize()
+    except Exception as e:
+        logger.error(f"Failed during MCP initialization: {e}", exc_info=True)
+        print(f"Error: MCP initialization failed: {e}", file=sys.stderr)
         sys.exit(1)
 
     print("MCP server started successfully!")

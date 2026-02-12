@@ -17,15 +17,13 @@ def test_mcp_client_call_tool():
     mock_process.stdout = Mock()
     mock_process.poll.return_value = None
 
-    # Mock the response
+    # Mock the response (text mode - no encode)
     response = {
         "jsonrpc": "2.0",
         "id": 1,
         "result": {"context": "test context", "citations": []},
     }
-    mock_process.stdout.readline.return_value = (
-        (json.dumps(response) + "\n").encode()
-    )
+    mock_process.stdout.readline.return_value = json.dumps(response) + "\n"
 
     client = MCPClient(mock_process)
 
@@ -42,15 +40,13 @@ def test_mcp_client_error_response():
     mock_process.stdout = Mock()
     mock_process.poll.return_value = None
 
-    # Mock an error response
+    # Mock an error response (text mode - no encode)
     response = {
         "jsonrpc": "2.0",
         "id": 1,
         "error": {"code": -32600, "message": "Invalid request"},
     }
-    mock_process.stdout.readline.return_value = (
-        (json.dumps(response) + "\n").encode()
-    )
+    mock_process.stdout.readline.return_value = json.dumps(response) + "\n"
 
     client = MCPClient(mock_process)
 
@@ -70,6 +66,65 @@ def test_mcp_client_close():
     mock_process.wait.assert_called_once()
 
 
+def test_mcp_client_initialize():
+    """Test MCP client initialization handshake."""
+    mock_process = Mock()
+    mock_process.stdin = Mock()
+    mock_process.stdout = Mock()
+    mock_process.poll.return_value = None
+
+    # Mock the initialize response
+    init_response = {
+        "jsonrpc": "2.0",
+        "id": 1,
+        "result": {
+            "protocolVersion": "2025-11-25",
+            "capabilities": {},
+            "serverInfo": {
+                "name": "mcp-rag-server",
+                "version": "0.2.0"
+            }
+        }
+    }
+    mock_process.stdout.readline.return_value = json.dumps(init_response) + "\n"
+
+    client = MCPClient(mock_process)
+    client.initialize()
+
+    # Verify stdin.write was called twice (initialize request + initialized notification)
+    assert mock_process.stdin.write.call_count == 2
+    
+    # Verify first call is initialize request
+    first_call = mock_process.stdin.write.call_args_list[0][0][0]
+    assert "initialize" in first_call
+    assert "protocolVersion" in first_call
+    
+    # Verify second call is initialized notification
+    second_call = mock_process.stdin.write.call_args_list[1][0][0]
+    assert "notifications/initialized" in second_call
+
+
+def test_mcp_client_initialize_error():
+    """Test MCP client handles initialization error."""
+    mock_process = Mock()
+    mock_process.stdin = Mock()
+    mock_process.stdout = Mock()
+    mock_process.poll.return_value = None
+
+    # Mock an error response during initialization
+    error_response = {
+        "jsonrpc": "2.0",
+        "id": 1,
+        "error": {"code": -32600, "message": "Invalid protocol version"}
+    }
+    mock_process.stdout.readline.return_value = json.dumps(error_response) + "\n"
+
+    client = MCPClient(mock_process)
+    
+    with pytest.raises(RuntimeError, match="MCP initialize error"):
+        client.initialize()
+
+
 def test_mcp_client_no_truncation():
     """Test that MCP client handles long responses without truncation."""
     mock_process = Mock()
@@ -87,9 +142,7 @@ def test_mcp_client_no_truncation():
         "id": 1,
         "result": {"context": long_text, "citations": []},
     }
-    mock_process.stdout.readline.return_value = (
-        (json.dumps(response) + "\n").encode()
-    )
+    mock_process.stdout.readline.return_value = json.dumps(response) + "\n"
 
     client = MCPClient(mock_process)
     result = client.call_tool("getInformationFor", {"prompt": "test"})
@@ -113,10 +166,8 @@ def test_mcp_client_utf8_encoding():
         "id": 1,
         "result": {"context": text_with_umlauts, "citations": []},
     }
-    # Use the same JSON serialization as production code
-    mock_process.stdout.readline.return_value = (
-        (json.dumps(response) + "\n").encode('utf-8')
-    )
+    # Use the same JSON serialization as production code (text mode)
+    mock_process.stdout.readline.return_value = json.dumps(response) + "\n"
 
     client = MCPClient(mock_process)
     result = client.call_tool("getInformationFor", {"prompt": "test"})
@@ -215,14 +266,22 @@ def test_chat_cli_main_with_debug_flag(test_config, capsys):
                     mock_process = Mock()
                     mock_start_server.return_value = mock_process
 
-                    # Simulate user selecting database and then quitting
-                    with patch("builtins.input", side_effect=["1", "quit"]):
-                        main()
+                    # Mock MCPClient and its initialize method
+                    with patch("mcp_agent_rag.chat_cli.MCPClient") as MockMCPClient:
+                        mock_client = Mock()
+                        MockMCPClient.return_value = mock_client
 
-                        # Verify start_mcp_server was called with debug=True
-                        mock_start_server.assert_called_once()
-                        call_args = mock_start_server.call_args
-                        assert call_args[1].get("debug") is True
+                        # Simulate user selecting database and then quitting
+                        with patch("builtins.input", side_effect=["1", "quit"]):
+                            main()
+
+                            # Verify start_mcp_server was called with debug=True
+                            mock_start_server.assert_called_once()
+                            call_args = mock_start_server.call_args
+                            assert call_args[1].get("debug") is True
+                            
+                            # Verify initialize was called
+                            mock_client.initialize.assert_called_once()
 
 
 def test_start_mcp_server_with_debug_flag(test_config):
