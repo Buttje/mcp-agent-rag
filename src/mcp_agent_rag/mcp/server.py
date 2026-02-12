@@ -11,7 +11,7 @@ from urllib.parse import parse_qs, urlparse
 
 from mcp_agent_rag.config import Config
 from mcp_agent_rag.database import DatabaseManager
-from mcp_agent_rag.mcp.agent import AgenticRAG
+from mcp_agent_rag.mcp.enhanced_rag import AgenticRAG as TrueAgenticRAG
 from mcp_agent_rag.utils import get_debug_logger, get_logger
 
 logger = get_logger(__name__)
@@ -78,8 +78,9 @@ class MCPServer:
         
         logger.info(f"Initialized server with tool prefix: '{self.tool_prefix}'")
 
-        # Initialize agentic RAG
-        self.agent = AgenticRAG(config, self.loaded_databases)
+        # Initialize agentic RAG with LLM-based iterative retrieval
+        # This creates internal database query tools that the LLM can call iteratively
+        self.agent = TrueAgenticRAG(config, self.loaded_databases)
 
     def _initialize(self, params: Dict) -> Dict:
         """Handle initialize request - required by MCP specification.
@@ -324,6 +325,9 @@ class MCPServer:
     def _get_information_for(self, params: Dict) -> Dict:
         """Handle getInformationFor - returns information from all activated databases.
         
+        Uses LLM-based agentic RAG flow where the LLM iteratively queries all
+        activated databases using internal tools until it has enough information.
+        
         Args:
             params: Dictionary with 'prompt' parameter
             
@@ -336,7 +340,8 @@ class MCPServer:
 
         max_results = params.get("max_results", 5)
 
-        # Use agentic RAG to get context from all active databases
+        # Use LLM-based agentic RAG to get context from all active databases
+        # The LLM will create internal tool calls to query databases iteratively
         context = self.agent.get_context(prompt, max_results)
 
         result = {
@@ -346,6 +351,7 @@ class MCPServer:
             "databases_searched": context["databases_searched"],
             "average_confidence": context.get("average_confidence", 0.0),
             "min_confidence_threshold": self.agent.min_confidence,
+            "iterations": context.get("iterations", 0),
         }
         
         # Debug logging: log final response
@@ -360,6 +366,9 @@ class MCPServer:
 
     def _get_information_for_db(self, params: Dict) -> Dict:
         """Handle getInformationForDB - returns information from specific database.
+        
+        Uses LLM-based agentic RAG flow where the LLM iteratively queries the 
+        specified database using internal tools until it has enough information.
         
         Args:
             params: Dictionary with 'prompt' and 'database_name' parameters
@@ -388,95 +397,31 @@ class MCPServer:
         if database_name not in self.loaded_databases:
             raise ValueError(f"Database '{database_name}' is not loaded")
         
-        db = self.loaded_databases[database_name]
+        # Create a temporary AgenticRAG instance with only the selected database
+        # This allows the LLM to iteratively query just this database
+        single_db = {database_name: self.loaded_databases[database_name]}
+        single_db_agent = TrueAgenticRAG(self.config, single_db)
         
-        # Get minimum confidence threshold from agent
-        min_confidence = self.agent.min_confidence
-        
-        # Generate query embedding
-        query_embedding = self.agent.embedder.embed_single(prompt)
-        if not query_embedding:
-            logger.error("Failed to generate query embedding")
-            return {
-                "prompt": prompt,
-                "database": database_name,
-                "context": "",
-                "citations": [],
-                "average_confidence": 0.0,
-                "min_confidence_threshold": min_confidence,
-            }
-        
-        # Search the specific database
-        results = db.search(query_embedding, k=max_results)
-        
-        # Process results with confidence filtering
-        context_parts = []
-        citations = []
-        seen_sources = set()
-        total_length = 0
-        max_context_length = self.config.get("max_context_length", 4000)
-        confidence_sum = 0.0
-        confidence_count = 0
-        
-        for distance, metadata in results:
-            # Convert distance to confidence score
-            confidence = 1.0 / (1.0 + distance)
-            
-            # Filter by minimum confidence threshold
-            if confidence < min_confidence:
-                logger.debug(
-                    f"Discarding result with confidence {confidence:.2f} "
-                    f"< threshold {min_confidence:.2f}"
-                )
-                continue
-            
-            source = metadata.get("source", "")
-            chunk_num = metadata.get("chunk_num", 0)
-            source_key = f"{source}:{chunk_num}"
-            
-            # Skip duplicates
-            if source_key in seen_sources:
-                continue
-            
-            chunk_text = metadata.get("text", "")
-            if not chunk_text:
-                continue
-            
-            # Check if adding this would exceed limit
-            if total_length + len(chunk_text) > max_context_length:
-                break
-            
-            context_parts.append(chunk_text)
-            citations.append({
-                "source": source,
-                "chunk": chunk_num,
-                "database": database_name,
-                "confidence": confidence,
-            })
-            seen_sources.add(source_key)
-            total_length += len(chunk_text)
-            confidence_sum += confidence
-            confidence_count += 1
-        
-        # Compose final context
-        context_text = "\n\n".join(context_parts)
-        average_confidence = confidence_sum / confidence_count if confidence_count > 0 else 0.0
+        # Use LLM-based agentic RAG to get context from the specific database
+        # The LLM will create internal tool calls to query the database iteratively
+        context = single_db_agent.get_context(prompt, max_results)
         
         result = {
             "prompt": prompt,
             "database": database_name,
-            "context": context_text,
-            "citations": citations,
-            "average_confidence": average_confidence,
-            "min_confidence_threshold": min_confidence,
+            "context": context["text"],
+            "citations": context["citations"],
+            "average_confidence": context.get("average_confidence", 0.0),
+            "min_confidence_threshold": single_db_agent.min_confidence,
+            "iterations": context.get("iterations", 0),
         }
         
         # Debug logging: log final response
         debug_logger = get_debug_logger()
         if debug_logger:
             debug_logger.log_final_response(
-                response=context_text,
-                citations=citations
+                response=context["text"],
+                citations=context["citations"]
             )
         
         return result
