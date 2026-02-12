@@ -9,6 +9,7 @@ from typing import Optional
 from mcp_agent_rag.utils.debug_logger import (
     DebugLogger,
     get_debug_logger,
+    log_if_debug,
     setup_debug_logger,
 )
 from mcp_agent_rag.utils.gpu_utils import (

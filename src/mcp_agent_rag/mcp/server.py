@@ -11,7 +11,7 @@ from urllib.parse import parse_qs, urlparse
 
 from mcp_agent_rag.config import Config
 from mcp_agent_rag.database import DatabaseManager
-from mcp_agent_rag.mcp.enhanced_rag import AgenticRAG as TrueAgenticRAG
+from mcp_agent_rag.mcp.enhanced_rag import AgenticRAG
 from mcp_agent_rag.rag.ollama_utils import get_model_capabilities
 from mcp_agent_rag.utils import get_debug_logger, get_logger
 
@@ -47,6 +47,7 @@ class MCPServer:
         self.active_databases = active_databases
         self.db_manager = DatabaseManager(config)
         self.agent = None
+        self._single_db_agents = {}  # Cache for single-database agents
         
         # Set protocol version (validate it's one of the supported versions)
         if protocol_version not in [MCP_PROTOCOL_VERSION_2024, MCP_PROTOCOL_VERSION_2025]:
@@ -81,7 +82,7 @@ class MCPServer:
 
         # Initialize agentic RAG with LLM-based iterative retrieval
         # This creates internal database query tools that the LLM can call iteratively
-        self.agent = TrueAgenticRAG(config, self.loaded_databases)
+        self.agent = AgenticRAG(config, self.loaded_databases)
         
         # Check if the generative model supports required capabilities (tools and thinking)
         generative_model = config.get("generative_model", "mistral:7b-instruct")
@@ -443,10 +444,13 @@ class MCPServer:
         if database_name not in self.loaded_databases:
             raise ValueError(f"Database '{database_name}' is not loaded")
         
-        # Create a temporary AgenticRAG instance with only the selected database
-        # This allows the LLM to iteratively query just this database
-        single_db = {database_name: self.loaded_databases[database_name]}
-        single_db_agent = TrueAgenticRAG(self.config, single_db)
+        # Get or create a cached single-database agent for efficiency
+        # This avoids creating a new agent instance on every query
+        if database_name not in self._single_db_agents:
+            single_db = {database_name: self.loaded_databases[database_name]}
+            self._single_db_agents[database_name] = AgenticRAG(self.config, single_db)
+        
+        single_db_agent = self._single_db_agents[database_name]
         
         # Use LLM-based agentic RAG to get context from the specific database
         # The LLM will create internal tool calls to query the database iteratively
