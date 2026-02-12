@@ -17,6 +17,9 @@ Debug log is created at:
 ```
 ~/.mcp-agent-rag/debug/debug_YYYYMMDD_HHMMSS.log
 ```
+Where `YYYYMMDD` is the date (e.g., `20260212`) and `HHMMSS` is the time (e.g., `210500`).
+
+Example: `~/.mcp-agent-rag/debug/debug_20260212_210500.log`
 
 ## What Gets Logged
 
