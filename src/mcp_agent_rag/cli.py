@@ -111,7 +111,7 @@ def main():
 
     # Determine log level - use DEBUG if --debug flag is set on server start command
     log_level = config.get("log_level", "INFO")
-    if args.command == "server" and hasattr(args, "debug") and args.debug:
+    if args.command == "server" and getattr(args, "debug", False):
         log_level = "DEBUG"
 
     setup_logger(
