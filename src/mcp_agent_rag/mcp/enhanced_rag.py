@@ -90,6 +90,8 @@ class EnhancedRetrieval:
             
             try:
                 results = db.search(query_embedding, k=max_results)
+                
+                # Track results for debug logging
                 filtered_count = 0
                 db_results = []
                 

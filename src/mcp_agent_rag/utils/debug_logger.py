@@ -190,11 +190,17 @@ class DebugLogger:
         # Simplify results for logging (avoid logging full text content)
         simplified_results = []
         for r in results:
+            text = r.get("text", "")
+            if text and len(text) > 100:
+                text_preview = text[:100] + "..."
+            else:
+                text_preview = text
+            
             simplified_results.append({
                 "source": r.get("source"),
                 "chunk": r.get("chunk_num"),
                 "confidence": r.get("confidence"),
-                "text_preview": r.get("text", "")[:100] + "..." if r.get("text") else ""
+                "text_preview": text_preview
             })
         
         data = {

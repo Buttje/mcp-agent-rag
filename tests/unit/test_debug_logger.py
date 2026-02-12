@@ -22,6 +22,8 @@ def test_debug_logger_disabled():
 
 def test_debug_logger_enabled():
     """Test debug logger when enabled."""
+    import re
+    
     with tempfile.TemporaryDirectory() as tmpdir:
         log_dir = Path(tmpdir)
         logger = DebugLogger(enabled=True, log_dir=log_dir)
@@ -40,6 +42,10 @@ def test_debug_logger_enabled():
         log_content = log_files[0].read_text()
         assert "test_module" in log_content
         assert "Test message" in log_content
+        
+        # Verify timestamp format [YYYY-MM-DD HH:MM:SS]
+        timestamp_pattern = r'\[\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}\]'
+        assert re.search(timestamp_pattern, log_content), "Timestamp format not found in log"
 
 
 def test_debug_logger_with_json_data():
