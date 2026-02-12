@@ -361,6 +361,9 @@ def main():
     )
     args = parser.parse_args()
 
+    # Enable verbose mode if debug is set (debug implies verbose)
+    verbose = args.verbose or args.debug
+
     # Load configuration
     config = Config()
 
@@ -454,8 +457,6 @@ def main():
     print("Starting MCP server...")
     try:
         mcp_process = start_mcp_server(config, selected_databases, debug=args.debug)
-        # Enable verbose mode if debug is set
-        verbose = args.verbose or args.debug
         mcp_client = MCPClient(mcp_process, verbose=verbose)
     except Exception as e:
         logger.error(f"Failed to start MCP server: {e}", exc_info=True)
@@ -468,8 +469,6 @@ def main():
     # Create AGNO agent with MCP tool
     print("Initializing agent...")
     try:
-        # Enable verbose mode if debug is set
-        verbose = args.verbose or args.debug
         # Create MCP query tool
         query_tool = create_mcp_tool_query_data(mcp_client, verbose=verbose)
 
@@ -484,8 +483,6 @@ def main():
         else:
             model_string = generative_model
 
-        # Enable verbose mode if debug is set
-        verbose = args.verbose or args.debug
         # Show model capability information in verbose mode
         if verbose:
             ollama_host = config.get("ollama_host", "http://localhost:11434")
@@ -580,8 +577,6 @@ def main():
 
                 # Use the agent to process the query with ReAct mechanism
                 try:
-                    # Enable verbose mode if debug is set
-                    verbose = args.verbose or args.debug
                     if verbose:
                         # In verbose mode, show the thinking process
                         print("🤔 [Agent Thinking...]")
