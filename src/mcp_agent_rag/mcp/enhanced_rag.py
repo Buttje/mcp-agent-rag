@@ -12,7 +12,7 @@ from typing import Dict, List, Optional, Tuple
 
 from mcp_agent_rag.config import Config
 from mcp_agent_rag.rag import OllamaEmbedder, OllamaGenerator, VectorDatabase
-from mcp_agent_rag.utils import get_logger
+from mcp_agent_rag.utils import get_debug_logger, get_logger
 
 logger = get_logger(__name__)
 
@@ -59,6 +59,11 @@ class EnhancedRetrieval:
             Includes confidence scores for each result. Only results with
             confidence >= min_confidence threshold are included.
         """
+        # Debug logging: log user prompt
+        debug_logger = get_debug_logger()
+        if debug_logger:
+            debug_logger.log_user_prompt(prompt)
+        
         # Generate query embedding
         query_embedding = self.embedder.embed_single(prompt)
         if not query_embedding:
@@ -75,8 +80,19 @@ class EnhancedRetrieval:
         databases_searched = []
 
         for db_name, db in self.databases.items():
+            # Debug logging: log RAG query
+            if debug_logger:
+                debug_logger.log_rag_query(
+                    database=db_name,
+                    query=prompt,
+                    embedding_preview=query_embedding if isinstance(query_embedding, list) else None
+                )
+            
             try:
                 results = db.search(query_embedding, k=max_results)
+                filtered_count = 0
+                db_results = []
+                
                 for distance, metadata in results:
                     # Convert distance to confidence score (0-1 range)
                     # Lower distance = higher confidence
@@ -88,9 +104,10 @@ class EnhancedRetrieval:
                             f"Discarding result with confidence {confidence:.2f} "
                             f"< threshold {self.min_confidence:.2f}"
                         )
+                        filtered_count += 1
                         continue
                     
-                    all_results.append({
+                    result_dict = {
                         "database": db_name,
                         "distance": distance,
                         "confidence": confidence,
@@ -98,7 +115,18 @@ class EnhancedRetrieval:
                         "source": metadata.get("source", ""),
                         "chunk_num": metadata.get("chunk_num", 0),
                         "metadata": metadata,
-                    })
+                    }
+                    all_results.append(result_dict)
+                    db_results.append(result_dict)
+                
+                # Debug logging: log RAG results
+                if debug_logger:
+                    debug_logger.log_rag_results(
+                        database=db_name,
+                        results=db_results,
+                        filtered_count=filtered_count
+                    )
+                
                 databases_searched.append(db_name)
                 logger.info(f"Found {len(results)} results in database '{db_name}'")
             except Exception as e:
@@ -149,6 +177,10 @@ class EnhancedRetrieval:
         context_text = "\n\n".join(context_parts)
         average_confidence = confidence_sum / confidence_count if confidence_count > 0 else 0.0
 
+        # Debug logging: log augmented prompt/context
+        if debug_logger:
+            debug_logger.log_augmented_prompt(prompt=prompt, context=context_text)
+        
         return {
             "text": context_text,
             "citations": citations,

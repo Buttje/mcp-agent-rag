@@ -6,7 +6,7 @@ import sys
 from mcp_agent_rag.config import Config
 from mcp_agent_rag.database import DatabaseManager
 from mcp_agent_rag.mcp import MCPServer
-from mcp_agent_rag.utils import get_logger, setup_logger
+from mcp_agent_rag.utils import get_logger, setup_debug_logger, setup_logger
 
 
 def main():
@@ -111,14 +111,21 @@ def main():
 
     # Determine log level - use DEBUG if --debug flag is set on server start command
     log_level = config.get("log_level", "INFO")
+    debug_enabled = False
     if args.command == "server" and getattr(args, "debug", False):
         log_level = "DEBUG"
+        debug_enabled = True
 
     setup_logger(
         log_file=log_file,
         level=log_level,
     )
     logger = get_logger("mcp-rag")
+    
+    # Setup debug logger if debug is enabled
+    if debug_enabled:
+        setup_debug_logger(enabled=True)
+        logger.info("Debug logging enabled")
 
     # Handle commands
     try:
