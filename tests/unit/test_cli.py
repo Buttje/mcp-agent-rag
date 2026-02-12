@@ -278,3 +278,86 @@ def test_main_with_default_log_file(test_config, capsys):
                 call_args = mock_setup_logger.call_args
                 assert "mcp-rag.log" in call_args[1]["log_file"]
 
+
+def test_server_start_with_debug_flag(test_config):
+    """Test server start command with --debug flag enables DEBUG logging."""
+    # Create test database
+    test_config.add_database("testdb", "/tmp/testdb")
+    test_config.save()
+
+    test_args = [
+        "mcp-rag",
+        "server",
+        "start",
+        "--active-databases",
+        "testdb",
+        "--debug",
+    ]
+
+    with patch.object(sys, "argv", test_args):
+        with patch("mcp_agent_rag.cli.Config", return_value=test_config):
+            with patch("mcp_agent_rag.cli.setup_logger") as mock_setup_logger:
+                with patch("mcp_agent_rag.cli.MCPServer") as MockMCPServer:
+                    mock_server = Mock()
+                    MockMCPServer.return_value = mock_server
+
+                    main()
+
+                    # Verify setup_logger was called with DEBUG level
+                    mock_setup_logger.assert_called_once()
+                    call_args = mock_setup_logger.call_args
+                    assert call_args[1]["level"] == "DEBUG"
+
+
+def test_server_start_without_debug_flag(test_config):
+    """Test server start command without --debug flag uses default/config log level."""
+    # Create test database
+    test_config.add_database("testdb", "/tmp/testdb")
+    test_config.save()
+
+    test_args = [
+        "mcp-rag",
+        "server",
+        "start",
+        "--active-databases",
+        "testdb",
+    ]
+
+    with patch.object(sys, "argv", test_args):
+        with patch("mcp_agent_rag.cli.Config", return_value=test_config):
+            with patch("mcp_agent_rag.cli.setup_logger") as mock_setup_logger:
+                with patch("mcp_agent_rag.cli.MCPServer") as MockMCPServer:
+                    mock_server = Mock()
+                    MockMCPServer.return_value = mock_server
+
+                    main()
+
+                    # Verify setup_logger was called with INFO level (default)
+                    mock_setup_logger.assert_called_once()
+                    call_args = mock_setup_logger.call_args
+                    assert call_args[1]["level"] == "INFO"
+
+
+def test_database_command_ignores_debug_flag(test_config):
+    """Test that database commands work normally (debug flag only applies to server command)."""
+    test_args = [
+        "mcp-rag",
+        "database",
+        "list",
+    ]
+
+    with patch.object(sys, "argv", test_args):
+        with patch("mcp_agent_rag.cli.setup_logger") as mock_setup_logger:
+            with patch("mcp_agent_rag.cli.DatabaseManager") as MockDBManager:
+                mock_db_manager = Mock()
+                mock_db_manager.list_databases.return_value = {}
+                MockDBManager.return_value = mock_db_manager
+
+                main()
+
+                # Verify setup_logger was called with default level
+                mock_setup_logger.assert_called_once()
+                call_args = mock_setup_logger.call_args
+                assert call_args[1]["level"] == "INFO"
+
+
