@@ -1,0 +1,2 @@
+2026-02-06 14:05:49 - mcp_agent_rag.chat_cli - INFO - chat_cli.py:108 - Starting MCP server with databases: LabControl, A2TS
+2026-02-06 14:05:50 - mcp_agent_rag.chat_cli - INFO - chat_cli.py:128 - MCP server started successfully
