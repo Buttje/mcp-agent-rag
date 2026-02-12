@@ -12,6 +12,16 @@ from pathlib import Path
 from typing import Any, Dict, Optional
 
 
+class ModuleFormatter(logging.Formatter):
+    """Custom formatter that handles module_name from LoggerAdapter."""
+    
+    def format(self, record):
+        # If module_name is not set, use the logger name
+        if not hasattr(record, 'module_name'):
+            record.module_name = record.name
+        return super().format(record)
+
+
 class DebugLogger:
     """Debug logger for MCP-RAG operations.
     
@@ -61,8 +71,9 @@ class DebugLogger:
         file_handler.setLevel(logging.DEBUG)
         
         # Format: [timestamp] [module] message
-        formatter = logging.Formatter(
-            fmt='[%(asctime)s] [%(name)s] %(message)s',
+        # Use a custom formatter to extract module name from LoggerAdapter
+        formatter = ModuleFormatter(
+            fmt='[%(asctime)s] [%(module_name)s] %(message)s',
             datefmt='%Y-%m-%d %H:%M:%S'
         )
         file_handler.setFormatter(formatter)
@@ -83,7 +94,8 @@ class DebugLogger:
             return
         
         # Create logger for this specific module
-        module_logger = logging.LoggerAdapter(self.logger, {'name': module})
+        # Note: We use 'module_name' as the extra field instead of 'name' to avoid conflicts
+        module_logger = logging.LoggerAdapter(self.logger, {'module_name': module})
         
         # Log the message
         if data:
