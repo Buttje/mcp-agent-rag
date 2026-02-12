@@ -1,19 +1,14 @@
-"""Interactive chat CLI with MCP server integration and AGNO agent."""
+"""Interactive chat CLI with MCP server integration."""
 
 import json
-import os
 import subprocess
 import sys
 import time
 from typing import Any
 
-from agno.agent import Agent
-
 from mcp_agent_rag.config import Config
 from mcp_agent_rag.database import DatabaseManager
-from mcp_agent_rag.rag.ollama_utils import get_model_capabilities
 from mcp_agent_rag.utils import get_logger, setup_logger
-from mcp_agent_rag.utils.agno_ollama_patch import apply_agno_ollama_patch
 
 
 # ANSI color codes for terminal output
@@ -31,15 +26,6 @@ class Colors:
     CYAN = "\033[96m"
     WHITE = "\033[97m"
     GRAY = "\033[90m"
-    
-    # Background colors
-    BG_RED = "\033[101m"
-    BG_GREEN = "\033[102m"
-    BG_YELLOW = "\033[103m"
-
-
-# Configuration constants
-CONTEXT_PREVIEW_LENGTH = 150  # Number of characters to show in context preview
 
 
 # Confidence thresholds for color coding
@@ -98,17 +84,15 @@ def print_citations(citations: list, show_confidence: bool = True):
 class MCPClient:
     """Client to communicate with MCP server via JSON-RPC."""
 
-    def __init__(self, process: subprocess.Popen, verbose: bool = False):
+    def __init__(self, process: subprocess.Popen):
         """Initialize MCP client with process.
 
         Args:
             process: The MCP server subprocess
-            verbose: Enable verbose output for debugging
         """
         self.process = process
         self.request_id = 0
         self.logger = get_logger(__name__)
-        self.verbose = verbose
 
     def call_tool(self, tool_name: str, arguments: dict[str, Any]) -> dict[str, Any]:
         """Call a tool on the MCP server.
@@ -128,11 +112,6 @@ class MCPClient:
             "params": {"name": tool_name, "arguments": arguments},
         }
 
-        if self.verbose:
-            print(f"\n{Colors.BOLD}{Colors.BLUE}🔧 [MCP Tool Call]{Colors.RESET}")
-            print(f"   Tool: {Colors.CYAN}{tool_name}{Colors.RESET}")
-            print(f"   Arguments: {Colors.GRAY}{arguments}{Colors.RESET}")
-
         try:
             # Send request with explicit UTF-8 encoding
             request_json = json.dumps(request) + "\n"
@@ -150,8 +129,6 @@ class MCPClient:
             if "error" in response:
                 error = response["error"]
                 error_msg = f"MCP error: {error.get('message', 'Unknown error')}"
-                if self.verbose:
-                    print(f"   {Colors.RED}❌ Error: {error_msg}{Colors.RESET}")
                 raise RuntimeError(error_msg)
 
             result = response.get("result", {})
@@ -170,41 +147,6 @@ class MCPClient:
                             # Not JSON, use as-is
                             result = {"text": text}
                             break
-
-            if self.verbose:
-                # Show a summary of the result with color coding
-                if "context" in result:
-                    context = result["context"]
-                    context_len = len(context)
-                    context_preview = context[:CONTEXT_PREVIEW_LENGTH] + "..." if context_len > CONTEXT_PREVIEW_LENGTH else context
-                    
-                    avg_conf = result.get("average_confidence")
-                    conf_str = ""
-                    if avg_conf is not None:
-                        conf_str = f" {Colors.GRAY}[Avg confidence: {format_confidence(avg_conf)}]{Colors.RESET}"
-                    
-                    print(f"   {Colors.GREEN}✅ Result: Retrieved context ({context_len} chars){Colors.RESET}{conf_str}")
-                    print(f"   {Colors.GRAY}Preview: {context_preview}{Colors.RESET}")
-                    
-                    if "citations" in result:
-                        citations = result.get("citations", [])
-                        print(f"   {Colors.CYAN}Citations: {len(citations)} sources{Colors.RESET}")
-                        
-                        # Show citations with confidence
-                        if citations and self.verbose:
-                            print_citations(citations[:3])  # Show first 3
-                            if len(citations) > 3:
-                                print(f"   {Colors.GRAY}... and {len(citations) - 3} more{Colors.RESET}")
-                    
-                    min_threshold = result.get("min_confidence_threshold")
-                    if min_threshold is not None:
-                        print(f"   {Colors.GRAY}Minimum confidence threshold: {format_confidence(min_threshold)}{Colors.RESET}")
-                
-                elif "error" in result:
-                    print(f"   {Colors.RED}❌ Tool Error: {result['error']}{Colors.RESET}")
-                else:
-                    print(f"   {Colors.GREEN}✅ Result: {Colors.RESET}{result}")
-                print()
 
             return result
 
@@ -282,70 +224,9 @@ def start_mcp_server(config: Config, active_databases: list[str], debug: bool = 
         raise
 
 
-def create_mcp_tool_query_data(mcp_client: MCPClient, verbose: bool = False):
-    """Create a tool function for querying data from MCP server.
-
-    Args:
-        mcp_client: The MCP client instance
-        verbose: Enable verbose output
-
-    Returns:
-        Tool function that can be used by AGNO agent
-    """
-
-    def query_data(prompt: str, max_results: int = 5) -> str:
-        """Query data from the MCP server's active databases.
-
-        Args:
-            prompt: The query prompt
-            max_results: Maximum results to return per database
-
-        Returns:
-            Context text with citations
-        """
-        if verbose:
-            print(f"\n💭 [Agent Decision: Using query_data tool]")
-            print(f"   Reason: Need to search document databases for information")
-            print(f"   Query: {prompt}")
-            print(f"   Max results: {max_results}")
-
-        try:
-            result = mcp_client.call_tool(
-                "query-get_data", {"prompt": prompt, "max_results": max_results}
-            )
-
-            context = result.get("context", "")
-            citations = result.get("citations", [])
-
-            # Format response with citations
-            response = context
-            if citations:
-                response += "\n\n**Sources:**\n"
-                unique_sources = {}
-                for citation in citations:
-                    source = citation.get("source", "Unknown")
-                    if source not in unique_sources:
-                        unique_sources[source] = []
-                    unique_sources[source].append(citation.get("chunk", 0))
-
-                for source in unique_sources:
-                    response += f"  - {source}\n"
-
-            return response
-
-        except Exception as e:
-            return f"Error querying data: {str(e)}"
-
-    return query_data
-
-
 def main():
-    """Main chat CLI entry point with MCP server and AGNO agent."""
+    """Main chat CLI entry point with MCP server."""
     import argparse
-
-    # Apply patch to agno library for better Ollama model capability detection
-    # This must be done before any Agent instances are created
-    apply_agno_ollama_patch()
 
     # Parse command-line arguments
     parser = argparse.ArgumentParser(description="MCP-RAG Interactive Chat Client")
@@ -355,19 +236,11 @@ def main():
         help="Path to log file (default: ~/.mcp-agent-rag/logs/mcp-rag-cli.log)",
     )
     parser.add_argument(
-        "--verbose",
-        action="store_true",
-        help="Enable verbose output showing thinking process and tool usage",
-    )
-    parser.add_argument(
         "--debug",
         action="store_true",
-        help="Enable debug logging (includes verbose output)",
+        help="Enable debug logging on the MCP server",
     )
     args = parser.parse_args()
-
-    # Enable verbose mode if debug is set (debug implies verbose)
-    verbose = args.verbose or args.debug
 
     # Load configuration
     config = Config()
@@ -462,7 +335,7 @@ def main():
     print("Starting MCP server...")
     try:
         mcp_process = start_mcp_server(config, selected_databases, debug=args.debug)
-        mcp_client = MCPClient(mcp_process, verbose=verbose)
+        mcp_client = MCPClient(mcp_process)
     except Exception as e:
         logger.error(f"Failed to start MCP server: {e}", exc_info=True)
         print(f"Error: Failed to start MCP server: {e}", file=sys.stderr)
@@ -470,106 +343,10 @@ def main():
 
     print("MCP server started successfully!")
     print()
-
-    # Create AGNO agent with MCP tool
-    print("Initializing agent...")
-    try:
-        # Create MCP query tool
-        query_tool = create_mcp_tool_query_data(mcp_client, verbose=verbose)
-
-        # Get Ollama host from config and set as environment variable
-        # This ensures AGNO Agent uses the configured Ollama server
-        # Note: OLLAMA_HOST is the standard environment variable used by Ollama clients
-        # This is set globally but is safe because this CLI runs in a single-threaded context
-        ollama_host = config.get("ollama_host", "http://localhost:11434")
-        os.environ["OLLAMA_HOST"] = ollama_host
-        
-        if verbose:
-            print(f"Using Ollama host: {ollama_host}")
-
-        # Get the generative model from config
-        # The config stores the Ollama model name (e.g., "mistral:7b-instruct")
-        # We prefix it with "ollama:" to get the AGNO format (e.g., "ollama:mistral:7b-instruct")
-        generative_model = config.get("generative_model", "mistral:7b-instruct")
-
-        # Handle both cases: model with or without "ollama:" prefix
-        if not generative_model.startswith("ollama:"):
-            model_string = f"ollama:{generative_model}"
-        else:
-            model_string = generative_model
-
-        # Show model capability information in verbose mode
-        if verbose:
-            capabilities, cap_error = get_model_capabilities(generative_model, ollama_host)
-            
-            has_thinking = "thinking" in capabilities
-            
-            if has_thinking:
-                print(f"✓ Model '{generative_model}' has native 'thinking' capability")
-            elif not cap_error:
-                print(f"ℹ Model '{generative_model}' does not have native 'thinking' capability")
-                print("  Will use manual Chain-of-Thought reasoning instead")
-        
-        # Initialize AGNO agent with Ollama model
-        agent = Agent(
-            name="MCP-RAG Assistant",
-            model=model_string,
-            description="An AI assistant that can query document databases via MCP server",
-            instructions=[
-                "You are a helpful AI assistant with access to document databases via RAG (Retrieval Augmented Generation).",
-                "",
-                "CRITICAL INSTRUCTIONS - READ CAREFULLY:",
-                "1. ALWAYS prioritize information from the RAG database over your own knowledge.",
-                "2. DO NOT invent, fabricate, or assume any information not present in the retrieved context.",
-                "3. Only use information from sources with confidence scores >= 85%. Lower confidence results are unreliable and must be discarded.",
-                "4. The RAG system filters results by confidence automatically, so all returned results meet the 85% threshold.",
-                "5. If the retrieved context does not contain enough information to answer the question, say so explicitly.",
-                "6. Never supplement RAG data with your own inference or general knowledge unless explicitly requested.",
-                "",
-                "WORKFLOW:",
-                "1. For every user question, FIRST use the query_data tool to search the databases.",
-                "2. Carefully analyze the retrieved context and confidence scores.",
-                "3. Base your answer SOLELY on the retrieved information.",
-                "4. ALWAYS cite your sources with database names and confidence scores.",
-                "5. If no relevant information is found, respond: 'I could not find relevant information in the databases to answer this question.'",
-                "",
-                "CITATION FORMAT:",
-                "- Always mention source documents and their confidence levels",
-                "- Example: 'According to [document.pdf] (confidence: 92%), ...'",
-                "",
-                "WHAT NOT TO DO:",
-                "- Do not answer from memory if RAG returns no results",
-                "- Do not mix your knowledge with RAG data",
-                "- Do not use information below 85% confidence",
-                "- Do not make assumptions beyond what the context explicitly states",
-            ],
-            tools=[query_tool],
-            markdown=True,
-            reasoning=True,  # Enable ReAct (Reasoning and Act) mechanism
-            debug_mode=verbose,  # Enable debug mode for verbose output
-        )
-
-        print("Agent initialized successfully!")
-        print()
-        if verbose:
-            print("🔍 Verbose mode enabled - showing thinking process and tool usage")
-            print()
-        print("Chat started! Type your questions below.")
-        print("Commands: 'quit', 'exit', '/q' to exit")
-        print("=" * 70)
-        print()
-
-    except Exception as e:
-        logger.error(f"Failed to initialize agent: {e}", exc_info=True)
-        print(f"Error: Failed to initialize agent: {e}", file=sys.stderr)
-        print(
-            f"\nMake sure Ollama is running and the model '{generative_model}' is "
-            "available.",
-            file=sys.stderr,
-        )
-        print(f"You can pull the model with: ollama pull {generative_model}", file=sys.stderr)
-        mcp_client.close()
-        sys.exit(1)
+    print("Chat started! Type your questions below.")
+    print("Commands: 'quit', 'exit', '/q' to exit")
+    print("=" * 70)
+    print()
 
     # Main chat loop
     try:
@@ -586,30 +363,30 @@ def main():
                     print("\nGoodbye!")
                     break
 
-                # Process query with agent
+                # Query the MCP server using getInformationFor tool
                 print()
-
-                # Use the agent to process the query with ReAct mechanism
                 try:
-                    if verbose:
-                        # In verbose mode, show the thinking process
-                        print("🤔 [Agent Thinking...]")
-                        print()
+                    # Call the MCP server's getInformationFor tool
+                    result = mcp_client.call_tool(
+                        "getInformationFor", 
+                        {"prompt": user_input, "max_results": 5}
+                    )
 
-                    print("Assistant: ", end="", flush=True)
-                    response = agent.run(user_input)
-
-                    # Print the agent's response
-                    if hasattr(response, 'content'):
-                        response_text = response.content
-                    else:
-                        response_text = str(response)
+                    # Extract response
+                    context = result.get("context", "")
+                    citations = result.get("citations", [])
                     
-                    print(response_text)
+                    # Display response
+                    print(f"Assistant: {context}")
+                    
+                    # Show citations if available
+                    if citations:
+                        print_citations(citations, show_confidence=True)
+                    
                     print()
 
                 except Exception as e:
-                    logger.error(f"Error running agent: {e}", exc_info=True)
+                    logger.error(f"Error querying MCP server: {e}", exc_info=True)
                     print(f"\nError processing query: {e}", file=sys.stderr)
                     print()
 

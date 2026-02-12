@@ -6,7 +6,7 @@ from unittest.mock import Mock, patch
 
 import pytest
 
-from mcp_agent_rag.chat_cli import MCPClient, create_mcp_tool_query_data, start_mcp_server, main
+from mcp_agent_rag.chat_cli import MCPClient, start_mcp_server, main
 
 
 def test_mcp_client_call_tool():
@@ -27,44 +27,12 @@ def test_mcp_client_call_tool():
         (json.dumps(response) + "\n").encode()
     )
 
-    client = MCPClient(mock_process, verbose=False)
+    client = MCPClient(mock_process)
 
-    result = client.call_tool("query-get_data", {"prompt": "test"})
+    result = client.call_tool("getInformationFor", {"prompt": "test"})
 
     assert result["context"] == "test context"
     assert result["citations"] == []
-
-
-def test_mcp_client_call_tool_verbose(capsys):
-    """Test MCP client tool calling with verbose mode."""
-    # Create a mock process
-    mock_process = Mock()
-    mock_process.stdin = Mock()
-    mock_process.stdout = Mock()
-    mock_process.poll.return_value = None
-
-    # Mock the response
-    response = {
-        "jsonrpc": "2.0",
-        "id": 1,
-        "result": {"context": "test context", "citations": [{"source": "test.txt"}]},
-    }
-    mock_process.stdout.readline.return_value = (
-        (json.dumps(response) + "\n").encode()
-    )
-
-    client = MCPClient(mock_process, verbose=True)
-
-    result = client.call_tool("query-get_data", {"prompt": "test"})
-
-    assert result["context"] == "test context"
-    assert result["citations"] == [{"source": "test.txt"}]
-
-    # Check verbose output
-    captured = capsys.readouterr()
-    assert "🔧 [MCP Tool Call]" in captured.out
-    assert "Tool: query-get_data" in captured.out
-    assert "✅ Result:" in captured.out
 
 
 def test_mcp_client_error_response():
@@ -87,7 +55,7 @@ def test_mcp_client_error_response():
     client = MCPClient(mock_process)
 
     with pytest.raises(RuntimeError, match="MCP error: Invalid request"):
-        client.call_tool("query-get_data", {"prompt": "test"})
+        client.call_tool("getInformationFor", {"prompt": "test"})
 
 
 def test_mcp_client_close():
@@ -100,49 +68,6 @@ def test_mcp_client_close():
 
     mock_process.terminate.assert_called_once()
     mock_process.wait.assert_called_once()
-
-
-def test_create_mcp_tool_query_data():
-    """Test creating MCP query tool."""
-    mock_client = Mock()
-    mock_client.call_tool.return_value = {
-        "context": "Test context",
-        "citations": [{"source": "test.txt", "chunk": 0}],
-    }
-
-    tool = create_mcp_tool_query_data(mock_client, verbose=False)
-    result = tool("test prompt")
-
-    assert "Test context" in result
-    assert "test.txt" in result
-    mock_client.call_tool.assert_called_once_with(
-        "query-get_data", {"prompt": "test prompt", "max_results": 5}
-    )
-
-
-def test_create_mcp_tool_query_data_verbose(capsys):
-    """Test creating MCP query tool with verbose mode."""
-    mock_client = Mock()
-    mock_client.call_tool.return_value = {
-        "context": "Test context",
-        "citations": [{"source": "test.txt", "chunk": 0}],
-    }
-
-    tool = create_mcp_tool_query_data(mock_client, verbose=True)
-    result = tool("test prompt", max_results=3)
-
-    assert "Test context" in result
-    assert "test.txt" in result
-
-    # Check verbose output
-    captured = capsys.readouterr()
-    assert "💭 [Agent Decision: Using query_data tool]" in captured.out
-    assert "Query: test prompt" in captured.out
-    assert "Max results: 3" in captured.out
-
-    mock_client.call_tool.assert_called_once_with(
-        "query-get_data", {"prompt": "test prompt", "max_results": 3}
-    )
 
 
 def test_mcp_client_no_truncation():
@@ -167,7 +92,7 @@ def test_mcp_client_no_truncation():
     )
 
     client = MCPClient(mock_process)
-    result = client.call_tool("query-get_data", {"prompt": "test"})
+    result = client.call_tool("getInformationFor", {"prompt": "test"})
 
     # Verify the full text is returned without truncation
     assert result["context"] == long_text
@@ -194,7 +119,7 @@ def test_mcp_client_utf8_encoding():
     )
 
     client = MCPClient(mock_process)
-    result = client.call_tool("query-get_data", {"prompt": "test"})
+    result = client.call_tool("getInformationFor", {"prompt": "test"})
 
     # Verify UTF-8 characters are preserved
     assert result["context"] == text_with_umlauts
@@ -272,41 +197,6 @@ def test_chat_cli_main_with_default_log_file(test_config):
                 assert "mcp-rag-cli.log" in call_args[1]["log_file"]
 
 
-def test_chat_cli_main_with_verbose_flag(test_config, capsys):
-    """Test chat CLI main with --verbose flag."""
-    test_args = ["mcp-rag-cli", "--verbose"]
-
-    with patch.object(sys, "argv", test_args):
-        with patch("mcp_agent_rag.chat_cli.setup_logger"):
-            with patch("mcp_agent_rag.chat_cli.DatabaseManager") as MockDBManager:
-                # Mock database manager to return a test database
-                mock_db_manager = Mock()
-                test_db_info = {"test_db": {"doc_count": 5, "description": "Test DB"}}
-                mock_db_manager.list_databases.return_value = test_db_info
-                MockDBManager.return_value = mock_db_manager
-
-                # Mock start_mcp_server to avoid starting actual server
-                with patch("mcp_agent_rag.chat_cli.start_mcp_server") as mock_start_server:
-                    mock_process = Mock()
-                    mock_start_server.return_value = mock_process
-
-                    # Mock Agent to avoid needing Ollama
-                    with patch("mcp_agent_rag.chat_cli.Agent") as MockAgent:
-                        # Simulate user selecting database and then quitting
-                        with patch("builtins.input", side_effect=["1", "quit"]):
-                            main()
-
-                            # Verify MCPClient was created with verbose=True
-                            # by checking the output contains verbose mode message
-                            captured = capsys.readouterr()
-                            assert "🔍 Verbose mode enabled" in captured.out
-
-                            # Verify Agent was created with debug_mode
-                            MockAgent.assert_called_once()
-                            call_kwargs = MockAgent.call_args[1]
-                            assert call_kwargs.get("debug_mode") is True
-
-
 def test_chat_cli_main_with_debug_flag(test_config, capsys):
     """Test chat CLI main with --debug flag."""
     test_args = ["mcp-rag-cli", "--debug"]
@@ -325,25 +215,14 @@ def test_chat_cli_main_with_debug_flag(test_config, capsys):
                     mock_process = Mock()
                     mock_start_server.return_value = mock_process
 
-                    # Mock Agent to avoid needing Ollama
-                    with patch("mcp_agent_rag.chat_cli.Agent") as MockAgent:
-                        # Simulate user selecting database and then quitting
-                        with patch("builtins.input", side_effect=["1", "quit"]):
-                            main()
+                    # Simulate user selecting database and then quitting
+                    with patch("builtins.input", side_effect=["1", "quit"]):
+                        main()
 
-                            # Verify start_mcp_server was called with debug=True
-                            mock_start_server.assert_called_once()
-                            call_args = mock_start_server.call_args
-                            assert call_args[1].get("debug") is True
-
-                            # Verify MCPClient was created with verbose=True (debug implies verbose)
-                            captured = capsys.readouterr()
-                            assert "🔍 Verbose mode enabled" in captured.out
-
-                            # Verify Agent was created with debug_mode=True
-                            MockAgent.assert_called_once()
-                            call_kwargs = MockAgent.call_args[1]
-                            assert call_kwargs.get("debug_mode") is True
+                        # Verify start_mcp_server was called with debug=True
+                        mock_start_server.assert_called_once()
+                        call_args = mock_start_server.call_args
+                        assert call_args[1].get("debug") is True
 
 
 def test_start_mcp_server_with_debug_flag(test_config):
@@ -376,49 +255,3 @@ def test_start_mcp_server_without_debug_flag(test_config):
             mock_popen.assert_called_once()
             call_args = mock_popen.call_args[0][0]
             assert "--debug" not in call_args
-
-
-def test_ollama_host_environment_variable_set(test_config, monkeypatch):
-    """Test that OLLAMA_HOST environment variable is set from config.
-    
-    This test verifies that the chat CLI correctly sets the OLLAMA_HOST environment
-    variable from the config before initializing the AGNO Agent. The OLLAMA_HOST
-    environment variable is the standard way to configure Ollama clients and is
-    used internally by the AGNO library to determine which Ollama server to connect to.
-    """
-    import os
-    
-    # Set a custom ollama_host in config
-    test_config.set("ollama_host", "http://custom-host:5050")
-    
-    # Clear any existing OLLAMA_HOST env var
-    monkeypatch.delenv("OLLAMA_HOST", raising=False)
-    
-    test_args = ["mcp-rag-cli"]
-    
-    with patch.object(sys, "argv", test_args):
-        with patch("mcp_agent_rag.chat_cli.setup_logger"):
-            # Mock Config to return our test_config
-            with patch("mcp_agent_rag.chat_cli.Config", return_value=test_config):
-                with patch("mcp_agent_rag.chat_cli.DatabaseManager") as MockDBManager:
-                    # Mock database manager to return a test database
-                    mock_db_manager = Mock()
-                    test_db_info = {"test_db": {"doc_count": 5, "description": "Test DB"}}
-                    mock_db_manager.list_databases.return_value = test_db_info
-                    MockDBManager.return_value = mock_db_manager
-                    
-                    # Mock start_mcp_server to avoid starting actual server
-                    with patch("mcp_agent_rag.chat_cli.start_mcp_server") as mock_start_server:
-                        mock_process = Mock()
-                        mock_start_server.return_value = mock_process
-                        
-                        # Mock Agent to avoid needing Ollama
-                        with patch("mcp_agent_rag.chat_cli.Agent") as MockAgent:
-                            # Simulate user selecting database and then quitting
-                            with patch("builtins.input", side_effect=["1", "quit"]):
-                                main()
-                                
-                                # Verify OLLAMA_HOST environment variable was set to the custom host
-                                # This is the standard way Ollama clients (including AGNO) determine
-                                # which server to connect to
-                                assert os.environ.get("OLLAMA_HOST") == "http://custom-host:5050"
