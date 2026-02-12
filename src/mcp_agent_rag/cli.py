@@ -91,6 +91,11 @@ def main():
         action="store_true",
         help="Use MCP protocol version 2024-11-05 for CODY compatibility (default: 2025-11-25)",
     )
+    start_parser.add_argument(
+        "--debug",
+        action="store_true",
+        help="Enable debug logging",
+    )
 
     args = parser.parse_args()
 
@@ -104,9 +109,14 @@ def main():
         log_dir = Config.get_default_data_dir() / "logs"
         log_file = str(log_dir / "mcp-rag.log")
 
+    # Determine log level - use DEBUG if --debug flag is set on server start command
+    log_level = config.get("log_level", "INFO")
+    if args.command == "server" and hasattr(args, "debug") and args.debug:
+        log_level = "DEBUG"
+
     setup_logger(
         log_file=log_file,
-        level=config.get("log_level", "INFO"),
+        level=log_level,
     )
     logger = get_logger("mcp-rag")
 
