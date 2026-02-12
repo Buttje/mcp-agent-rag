@@ -256,6 +256,10 @@ def start_mcp_server(config: Config, active_databases: list[str], debug: bool = 
             level_pattern = re.compile(r' - (DEBUG|INFO|WARNING|ERROR|CRITICAL) - ')
             
             for line in iter(pipe.readline, ''):
+                # Ensure line is a string (handle mock objects in tests)
+                if not isinstance(line, str):
+                    continue
+                    
                 line = line.rstrip()
                 if not line:
                     continue
