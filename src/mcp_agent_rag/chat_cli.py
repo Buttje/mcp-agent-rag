@@ -251,8 +251,33 @@ def start_mcp_server(config: Config, active_databases: list[str], debug: bool = 
 
         # Start a daemon thread to read stderr to avoid blocking the server when logs are generated
         def _drain_stderr(pipe, log):
+            import re
+            # Pattern to match log level in server output: "... - LEVEL - ..."
+            level_pattern = re.compile(r' - (DEBUG|INFO|WARNING|ERROR|CRITICAL) - ')
+            
             for line in iter(pipe.readline, ''):
-                log.error(f"[server] {line.rstrip()}")
+                line = line.rstrip()
+                if not line:
+                    continue
+                    
+                # Try to extract log level from the server's log message
+                match = level_pattern.search(line)
+                if match:
+                    level = match.group(1)
+                    # Map log level to appropriate logger method
+                    if level == "DEBUG":
+                        log.debug(f"[server] {line}")
+                    elif level == "INFO":
+                        log.info(f"[server] {line}")
+                    elif level == "WARNING":
+                        log.warning(f"[server] {line}")
+                    elif level == "ERROR":
+                        log.error(f"[server] {line}")
+                    elif level == "CRITICAL":
+                        log.critical(f"[server] {line}")
+                else:
+                    # If no log level found, treat as info (not error)
+                    log.info(f"[server] {line}")
 
         threading.Thread(target=_drain_stderr, args=(process.stderr, logger), daemon=True).start()
 

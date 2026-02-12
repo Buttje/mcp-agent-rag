@@ -47,7 +47,21 @@ def setup_logger(
     logger.handlers.clear()
 
     # Console handler - use stderr to avoid interfering with stdout (used for JSON-RPC)
-    console_handler = logging.StreamHandler(sys.stderr)
+    # Force UTF-8 encoding to handle Unicode characters properly on all platforms
+    import io
+    if hasattr(sys.stderr, 'buffer'):
+        # Python 3.7+: Use the buffer with UTF-8 encoding and error handling
+        stderr_stream = io.TextIOWrapper(
+            sys.stderr.buffer,
+            encoding='utf-8',
+            errors='replace',  # Replace unencodable characters instead of crashing
+            line_buffering=True
+        )
+    else:
+        # Fallback for older Python versions
+        stderr_stream = sys.stderr
+    
+    console_handler = logging.StreamHandler(stderr_stream)
     console_handler.setLevel(getattr(logging, level.upper()))
     console_format = logging.Formatter(
         "%(asctime)s - %(name)s - %(levelname)s - %(message)s",

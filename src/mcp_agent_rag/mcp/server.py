@@ -101,11 +101,11 @@ class MCPServer:
                     f"Supported capabilities: {capabilities}"
                 )
             else:
-                logger.info(f"Model '{generative_model}' supports tools capability ✓")
+                logger.info(f"Model '{generative_model}' supports tools capability [OK]")
             
             # Check for thinking capability (optional but recommended)
             if "thinking" in capabilities:
-                logger.info(f"Model '{generative_model}' supports thinking capability ✓")
+                logger.info(f"Model '{generative_model}' supports thinking capability [OK]")
             else:
                 logger.info(
                     f"Model '{generative_model}' does not support 'thinking' capability. "
