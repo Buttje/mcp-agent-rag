@@ -23,10 +23,10 @@ EMBEDDING_MODEL_PATTERNS = [
 
 def normalize_host(host: str) -> str:
     """Normalize Ollama host URL.
-    
+
     Args:
         host: Ollama host URL
-        
+
     Returns:
         Normalized host URL
     """
@@ -38,11 +38,11 @@ def normalize_host(host: str) -> str:
 
 def check_ollama_connection(host: str, timeout: int = 5) -> tuple[bool, str]:
     """Test connection to Ollama server.
-    
+
     Args:
         host: Ollama host URL
         timeout: Request timeout in seconds
-        
+
     Returns:
         Tuple of (success, error_message)
     """
@@ -68,11 +68,11 @@ def check_ollama_connection(host: str, timeout: int = 5) -> tuple[bool, str]:
 
 def fetch_ollama_models(host: str, timeout: int = 5) -> tuple[list[str], list[str], str]:
     """Fetch available models from Ollama server and categorize them.
-    
+
     Args:
         host: Ollama host URL
         timeout: Request timeout in seconds
-        
+
     Returns:
         Tuple of (embedding_models, generative_models, error_message)
         If successful, error_message is empty. If failed, model lists are empty.
@@ -99,7 +99,9 @@ def fetch_ollama_models(host: str, timeout: int = 5) -> tuple[list[str], list[st
             display_name = model_name.replace(":latest", "")
 
             # Check if it's an embedding model using patterns
-            is_embedding = any(pattern in model_name.lower() for pattern in EMBEDDING_MODEL_PATTERNS)
+            is_embedding = any(
+                pattern in model_name.lower() for pattern in EMBEDDING_MODEL_PATTERNS
+            )
 
             if is_embedding:
                 embedding_models.append(display_name)
@@ -118,12 +120,12 @@ def fetch_ollama_models(host: str, timeout: int = 5) -> tuple[list[str], list[st
 
 def check_and_setup_gpu(python_path: Path, pip_path: Path, no_prompt: bool) -> dict:
     """Check for GPU availability and optionally install PyTorch with GPU support.
-    
+
     Args:
         python_path: Path to Python executable
         pip_path: Path to pip executable
         no_prompt: Whether to skip prompts
-        
+
     Returns:
         Dictionary with setup results
     """
@@ -132,28 +134,28 @@ def check_and_setup_gpu(python_path: Path, pip_path: Path, no_prompt: bool) -> d
         "pytorch_installed": False,
         "manual_install_needed": False,
     }
-    
+
     print("\nChecking for GPU availability...")
-    
+
     # Check if PyTorch is already installed
     pytorch_check = subprocess.run(
         [str(python_path), "-c", "import torch; print(torch.__version__)"],
         capture_output=True,
         text=True,
     )
-    
+
     pytorch_already_installed = pytorch_check.returncode == 0
-    
+
     if pytorch_already_installed:
         print("✓ PyTorch is already installed")
-        
+
         # Check CUDA availability
         cuda_check = subprocess.run(
             [str(python_path), "-c", "import torch; print(torch.cuda.is_available())"],
             capture_output=True,
             text=True,
         )
-        
+
         if cuda_check.returncode == 0 and "True" in cuda_check.stdout:
             print("✓ CUDA is available - GPU support enabled")
             result["gpu_enabled"] = True
@@ -161,47 +163,51 @@ def check_and_setup_gpu(python_path: Path, pip_path: Path, no_prompt: bool) -> d
             return result
         else:
             print("○ PyTorch installed but CUDA not available")
+            result["pytorch_installed"] = True
             if no_prompt:
                 print("  Continuing with CPU-only mode")
                 return result
     else:
         print("○ PyTorch not installed")
-    
+
     # Check for NVIDIA GPU
     nvidia_check = subprocess.run(
         ["nvidia-smi", "--query-gpu=name,driver_version", "--format=csv,noheader"],
         capture_output=True,
         text=True,
     )
-    
+
     has_nvidia_gpu = nvidia_check.returncode == 0
-    
+
     if has_nvidia_gpu:
         print("\n✓ NVIDIA GPU detected:")
         gpu_info_lines = nvidia_check.stdout.strip().split('\n')
         for line in gpu_info_lines:
             print(f"  {line}")
-        
+
         # Check if CUDA toolkit is installed
         cuda_available = _check_cuda_toolkit()
-        
+
         if not cuda_available:
             print("\n⚠ CUDA Toolkit not detected")
-            print("  GPU drivers are installed, but CUDA Toolkit is required for PyTorch GPU support")
-            
+            print(
+                "  GPU drivers are installed, but CUDA Toolkit is required "
+                "for PyTorch GPU support"
+            )
+
             if no_prompt:
                 print("  Skipping GPU setup (--no-prompt specified)")
                 result["manual_install_needed"] = True
                 _print_gpu_install_instructions()
                 return result
-            
+
             print("\nOptions:")
             print("  1. Install PyTorch with CPU-only support (recommended for now)")
             print("  2. View instructions for manual CUDA Toolkit installation")
             print("  3. Skip PyTorch installation")
-            
+
             choice = input("\nSelect option [1]: ").strip() or "1"
-            
+
             if choice == "2":
                 _print_gpu_install_instructions()
                 result["manual_install_needed"] = True
@@ -213,16 +219,16 @@ def check_and_setup_gpu(python_path: Path, pip_path: Path, no_prompt: bool) -> d
             # Fall through to option 1
         else:
             print("✓ CUDA Toolkit detected")
-            
+
             if no_prompt:
                 # Automatically install PyTorch with GPU support
                 print("\nInstalling PyTorch with CUDA support...")
                 return _install_pytorch_gpu(python_path, pip_path, result)
-            
+
             print("\nDo you want to install PyTorch with GPU support?")
             print("  This will enable GPU acceleration for image OCR processing")
             choice = input("Install PyTorch with GPU support? [Y/n]: ").strip().lower()
-            
+
             if choice in ['', 'y', 'yes']:
                 return _install_pytorch_gpu(python_path, pip_path, result)
             else:
@@ -230,7 +236,7 @@ def check_and_setup_gpu(python_path: Path, pip_path: Path, no_prompt: bool) -> d
                 return result
     else:
         print("\n○ No NVIDIA GPU detected")
-        
+
         # Check for Apple Silicon
         os_name = platform.system()
         if os_name == "Darwin":
@@ -239,17 +245,18 @@ def check_and_setup_gpu(python_path: Path, pip_path: Path, no_prompt: bool) -> d
             if arch == "arm64":
                 print("✓ Apple Silicon detected")
                 if not pytorch_already_installed:
-                    if no_prompt or input("Install PyTorch with MPS support? [Y/n]: ").strip().lower() in ['', 'y', 'yes']:
+                    prompt = "Install PyTorch with MPS support? [Y/n]: "
+                    if no_prompt or input(prompt).strip().lower() in ['', 'y', 'yes']:
                         return _install_pytorch_mps(python_path, pip_path, result)
-        
+
         print("Continuing with CPU-only mode")
-    
+
     return result
 
 
 def _check_cuda_toolkit() -> bool:
     """Check if CUDA toolkit is installed.
-    
+
     Returns:
         True if CUDA toolkit is available
     """
@@ -268,18 +275,18 @@ def _check_cuda_toolkit() -> bool:
 
 def _install_pytorch_gpu(python_path: Path, pip_path: Path, result: dict) -> dict:
     """Install PyTorch with GPU support.
-    
+
     Args:
         python_path: Path to Python executable
         pip_path: Path to pip executable
         result: Result dictionary to update
-        
+
     Returns:
         Updated result dictionary
     """
     print("\nInstalling PyTorch with CUDA support...")
     print("This may take several minutes...")
-    
+
     try:
         subprocess.run(
             [
@@ -293,57 +300,57 @@ def _install_pytorch_gpu(python_path: Path, pip_path: Path, result: dict) -> dic
             ],
             check=True,
         )
-        
+
         print("✓ PyTorch with CUDA support installed successfully")
         result["pytorch_installed"] = True
         result["gpu_enabled"] = True
-        
+
     except subprocess.CalledProcessError as e:
         print(f"✗ Failed to install PyTorch: {e}")
         print("  Continuing with CPU-only mode")
-    
+
     return result
 
 
 def _install_pytorch_mps(python_path: Path, pip_path: Path, result: dict) -> dict:
     """Install PyTorch with MPS support for Apple Silicon.
-    
+
     Args:
         python_path: Path to Python executable
         pip_path: Path to pip executable
         result: Result dictionary to update
-        
+
     Returns:
         Updated result dictionary
     """
     print("\nInstalling PyTorch with MPS support...")
     print("This may take several minutes...")
-    
+
     try:
         subprocess.run(
             [str(pip_path), "install", "torch", "torchvision", "torchaudio"],
             check=True,
         )
-        
+
         print("✓ PyTorch with MPS support installed successfully")
         result["pytorch_installed"] = True
         result["gpu_enabled"] = True
-        
+
     except subprocess.CalledProcessError as e:
         print(f"✗ Failed to install PyTorch: {e}")
         print("  Continuing with CPU-only mode")
-    
+
     return result
 
 
 def _print_gpu_install_instructions():
     """Print GPU installation instructions."""
     os_name = platform.system()
-    
+
     print("\n" + "=" * 70)
     print("GPU DRIVER AND CUDA TOOLKIT INSTALLATION INSTRUCTIONS")
     print("=" * 70)
-    
+
     if os_name == "Linux":
         print("""
 For NVIDIA GPUs on Linux:
@@ -397,7 +404,7 @@ Please visit the following resources:
 - CUDA Toolkit: https://developer.nvidia.com/cuda-downloads
 - PyTorch installation: https://pytorch.org/get-started/locally/
 """)
-    
+
     print("=" * 70)
 
 
@@ -468,7 +475,7 @@ def main():
     print("\n" + "=" * 60)
     print("GPU Detection and PyTorch Setup")
     print("=" * 60)
-    
+
     gpu_setup_result = check_and_setup_gpu(python_path, pip_path, args.no_prompt)
 
     # Configuration
@@ -488,7 +495,7 @@ def main():
             print("Preserving existing configuration...")
             with open(config_path) as f:
                 config = json.load(f)
-            
+
             # Add new agentic RAG fields if they don't exist
             needs_save = False
             if "query_inference_threshold" not in config:
@@ -500,7 +507,7 @@ def main():
             if "final_augmentation_threshold" not in config:
                 config["final_augmentation_threshold"] = 0.80
                 needs_save = True
-            
+
             if needs_save:
                 print("Adding new agentic RAG configuration fields...")
                 with open(config_path, "w") as f:
@@ -511,7 +518,8 @@ def main():
         else:
             print("\nSetting up configuration...")
             # Pass actual GPU status from setup, defaulting to True to auto-detect at runtime
-            config = create_config(args.no_prompt, gpu_enabled=gpu_setup_result.get("gpu_enabled", True))
+            gpu_enabled = gpu_setup_result.get("gpu_enabled", True)
+            config = create_config(args.no_prompt, gpu_enabled=gpu_enabled)
 
             with open(config_path, "w") as f:
                 json.dump(config, f, indent=2)
@@ -528,7 +536,7 @@ def main():
         print(f"  1. Activate: source {venv_path}/bin/activate")
     print("  2. Run: mcp-rag --help")
     print(f"\nConfig file: {config_path}")
-    
+
     # Display GPU setup summary
     if gpu_setup_result.get("gpu_enabled"):
         print("\n✓ GPU support enabled")
@@ -599,7 +607,10 @@ def create_config(no_prompt: bool, gpu_enabled: bool = True) -> dict:
             print(f"Warning: {error}")
             print("Will use default model options.")
         else:
-            print(f"Found {len(embedding_models)} embedding model(s) and {len(generative_models)} generative model(s)")
+            print(
+                f"Found {len(embedding_models)} embedding model(s) and "
+                f"{len(generative_models)} generative model(s)"
+            )
     else:
         print(f"⚠ Warning: {error}")
         print("Will use default model options. You can change them later in the config.")
