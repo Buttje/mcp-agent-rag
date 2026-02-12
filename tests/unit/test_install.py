@@ -3,9 +3,7 @@
 import subprocess
 import sys
 from pathlib import Path
-from unittest.mock import MagicMock, Mock, patch
-
-import pytest
+from unittest.mock import Mock, patch
 
 # Add the project root to the path so we can import install
 sys.path.insert(0, str(Path(__file__).parent.parent.parent))
@@ -123,7 +121,7 @@ class TestCheckOllamaConnection:
         """Test connection error."""
         # We need to import the real requests exceptions for the test
         import requests as real_requests
-        
+
         mock_requests.exceptions = real_requests.exceptions
         mock_requests.get.side_effect = real_requests.exceptions.ConnectionError("Connection error")
 
@@ -220,13 +218,13 @@ class TestCheckAndSetupGPU:
             Mock(returncode=0, stdout="2.0.0"),  # PyTorch check
             Mock(returncode=0, stdout="True"),    # CUDA check
         ]
-        
+
         result = install.check_and_setup_gpu(
             Path("/usr/bin/python"),
             Path("/usr/bin/pip"),
             no_prompt=True
         )
-        
+
         assert result["gpu_enabled"] is True
         assert result["pytorch_installed"] is True
         assert result["manual_install_needed"] is False
@@ -238,13 +236,13 @@ class TestCheckAndSetupGPU:
             Mock(returncode=0, stdout="2.0.0"),  # PyTorch check
             Mock(returncode=0, stdout="False"),  # CUDA check
         ]
-        
+
         result = install.check_and_setup_gpu(
             Path("/usr/bin/python"),
             Path("/usr/bin/pip"),
             no_prompt=True
         )
-        
+
         assert result["gpu_enabled"] is False
         assert result["pytorch_installed"] is True
         assert result["manual_install_needed"] is False
@@ -256,15 +254,77 @@ class TestCheckAndSetupGPU:
             Mock(returncode=1, stdout=""),       # PyTorch not installed
             Mock(returncode=1, stdout=""),       # nvidia-smi not available
         ]
-        
+
         result = install.check_and_setup_gpu(
             Path("/usr/bin/python"),
             Path("/usr/bin/pip"),
             no_prompt=True
         )
-        
+
         assert result["gpu_enabled"] is False
         assert result["pytorch_installed"] is False
+
+    @patch('subprocess.run')
+    def test_check_and_setup_gpu_nvidia_smi_not_found(self, mock_run):
+        """Test when nvidia-smi command is not found (FileNotFoundError)."""
+        mock_run.side_effect = [
+            Mock(returncode=0, stdout="2.0.0"),  # PyTorch check succeeds
+            Mock(returncode=0, stdout="False"),  # CUDA check - not available
+            FileNotFoundError,                   # nvidia-smi not found
+        ]
+
+        result = install.check_and_setup_gpu(
+            Path("/usr/bin/python"),
+            Path("/usr/bin/pip"),
+            no_prompt=True
+        )
+
+        # Should handle FileNotFoundError gracefully
+        assert result["gpu_enabled"] is False
+        assert result["pytorch_installed"] is True
+        assert result["manual_install_needed"] is False
+
+    @patch('subprocess.run')
+    def test_check_and_setup_gpu_nvidia_smi_not_found_no_pytorch(self, mock_run):
+        """Test when nvidia-smi command is not found and PyTorch not installed."""
+        mock_run.side_effect = [
+            Mock(returncode=1, stdout=""),       # PyTorch not installed
+            FileNotFoundError,                   # nvidia-smi not found
+        ]
+
+        result = install.check_and_setup_gpu(
+            Path("/usr/bin/python"),
+            Path("/usr/bin/pip"),
+            no_prompt=True
+        )
+
+        # Should handle FileNotFoundError gracefully
+        assert result["gpu_enabled"] is False
+        assert result["pytorch_installed"] is False
+        assert result["manual_install_needed"] is False
+
+    @patch('subprocess.run')
+    def test_check_and_setup_gpu_nvidia_smi_file_not_found_windows(self, mock_run):
+        """Test handling of Windows-specific nvidia-smi FileNotFoundError scenario."""
+        # Simulate the exact scenario from the bug report:
+        # PyTorch installed, CUDA not available, nvidia-smi raises FileNotFoundError
+        mock_run.side_effect = [
+            Mock(returncode=0, stdout="2.0.0"),  # PyTorch installed
+            Mock(returncode=0, stdout="False"),  # CUDA not available
+            FileNotFoundError,  # nvidia-smi not found (Windows: "[WinError 2]")
+        ]
+
+        # This should not raise an exception
+        result = install.check_and_setup_gpu(
+            Path("C:\\Python\\python.exe"),
+            Path("C:\\Python\\Scripts\\pip.exe"),
+            no_prompt=True
+        )
+
+        # Should continue with CPU-only mode
+        assert result["gpu_enabled"] is False
+        assert result["pytorch_installed"] is True
+        assert result["manual_install_needed"] is False
 
 
 class TestMainErrorHandling:
@@ -277,7 +337,7 @@ class TestMainErrorHandling:
         """Test that create_config handles input errors gracefully via safe_input."""
         # Mock environment
         mock_exists.return_value = False
-        
+
         # The safe_input function should handle EOFError internally
         # So we should test that it returns the default when input fails
         with patch('builtins.input', side_effect=EOFError):
@@ -291,7 +351,7 @@ class TestCreateConfig:
     def test_create_config_no_prompt(self):
         """Test create_config with no_prompt=True."""
         config = install.create_config(no_prompt=True, gpu_enabled=True)
-        
+
         assert config["embedding_model"] == "nomic-embed-text"
         assert config["generative_model"] == "mistral:7b-instruct"
         assert config["chunk_size"] == 512
@@ -326,9 +386,9 @@ class TestCreateConfig:
             "",    # Chunk size (use default)
             "",    # Chunk overlap (use default)
         ]
-        
+
         config = install.create_config(no_prompt=False, gpu_enabled=True)
-        
+
         assert config["embedding_model"] == "nomic-embed-text"
         assert config["generative_model"] == "mistral:7b-instruct"
 
@@ -344,9 +404,9 @@ class TestCreateConfig:
             "",    # Chunk size (use default)
             "",    # Chunk overlap (use default)
         ]
-        
+
         config = install.create_config(no_prompt=False, gpu_enabled=True)
-        
+
         # Should use defaults even when connection fails
         assert config["embedding_model"] == "nomic-embed-text"
         assert config["generative_model"] == "mistral:7b-instruct"

@@ -23,11 +23,11 @@ EMBEDDING_MODEL_PATTERNS = [
 
 def safe_input(prompt: str, default: str = "") -> str:
     """Safely get user input with error handling.
-    
+
     Args:
         prompt: The prompt to display to the user
         default: Default value to return if input fails
-        
+
     Returns:
         User input or default value
     """
@@ -188,13 +188,16 @@ def check_and_setup_gpu(python_path: Path, pip_path: Path, no_prompt: bool) -> d
         print("○ PyTorch not installed")
 
     # Check for NVIDIA GPU
-    nvidia_check = subprocess.run(
-        ["nvidia-smi", "--query-gpu=name,driver_version", "--format=csv,noheader"],
-        capture_output=True,
-        text=True,
-    )
-
-    has_nvidia_gpu = nvidia_check.returncode == 0
+    try:
+        nvidia_check = subprocess.run(
+            ["nvidia-smi", "--query-gpu=name,driver_version", "--format=csv,noheader"],
+            capture_output=True,
+            text=True,
+        )
+        has_nvidia_gpu = nvidia_check.returncode == 0
+    except FileNotFoundError:
+        # nvidia-smi not found (no NVIDIA drivers installed or not in PATH)
+        has_nvidia_gpu = False
 
     if has_nvidia_gpu:
         print("\n✓ NVIDIA GPU detected:")
