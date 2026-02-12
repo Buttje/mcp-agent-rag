@@ -20,8 +20,8 @@ class TestMCPClientLogging:
         with tempfile.TemporaryDirectory() as tmpdir:
             log_dir = Path(tmpdir)
             
-            # Setup debug logger
-            debug_logger = setup_debug_logger(enabled=True, log_dir=log_dir)
+            # Setup debug logger (needed for side effect)
+            _ = setup_debug_logger(enabled=True, log_dir=log_dir)
             
             # Create mock process
             mock_process = Mock(spec=subprocess.Popen)
@@ -62,8 +62,8 @@ class TestMCPClientLogging:
         with tempfile.TemporaryDirectory() as tmpdir:
             log_dir = Path(tmpdir)
             
-            # Setup debug logger
-            debug_logger = setup_debug_logger(enabled=True, log_dir=log_dir)
+            # Setup debug logger (needed for side effect)
+            _ = setup_debug_logger(enabled=True, log_dir=log_dir)
             
             # Create mock process
             mock_process = Mock(spec=subprocess.Popen)
@@ -133,8 +133,8 @@ class TestMCPClientLogging:
         with tempfile.TemporaryDirectory() as tmpdir:
             log_dir = Path(tmpdir)
             
-            # Setup debug logger
-            debug_logger = setup_debug_logger(enabled=True, log_dir=log_dir)
+            # Setup debug logger (needed for side effect)
+            _ = setup_debug_logger(enabled=True, log_dir=log_dir)
             
             # Create mock process
             mock_process = Mock(spec=subprocess.Popen)

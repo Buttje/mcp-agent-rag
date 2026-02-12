@@ -116,6 +116,9 @@ class MCPClient:
         Returns:
             Tool result as dictionary
         """
+        # Get debug logger once for reuse
+        debug_logger = get_debug_logger()
+        
         self.request_id += 1
         request = {
             "jsonrpc": "2.0",
@@ -125,7 +128,6 @@ class MCPClient:
         }
         
         # Debug logging: log tool call request
-        debug_logger = get_debug_logger()
         if debug_logger:
             debug_logger.log(
                 "mcp.client",
@@ -617,8 +619,10 @@ def main():
                     print("\nGoodbye!")
                     break
 
-                # Debug logging: log user prompt
+                # Get debug logger once for reuse in this iteration
                 debug_logger = get_debug_logger()
+                
+                # Debug logging: log user prompt
                 if debug_logger:
                     debug_logger.log_user_prompt(user_input)
 
