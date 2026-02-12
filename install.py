@@ -161,6 +161,7 @@ def check_and_setup_gpu(python_path: Path, pip_path: Path, no_prompt: bool) -> d
             return result
         else:
             print("○ PyTorch installed but CUDA not available")
+            result["pytorch_installed"] = True
             if no_prompt:
                 print("  Continuing with CPU-only mode")
                 return result
