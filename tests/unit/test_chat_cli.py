@@ -379,7 +379,13 @@ def test_start_mcp_server_without_debug_flag(test_config):
 
 
 def test_ollama_host_environment_variable_set(test_config, monkeypatch):
-    """Test that OLLAMA_HOST environment variable is set from config."""
+    """Test that OLLAMA_HOST environment variable is set from config.
+    
+    This test verifies that the chat CLI correctly sets the OLLAMA_HOST environment
+    variable from the config before initializing the AGNO Agent. The OLLAMA_HOST
+    environment variable is the standard way to configure Ollama clients and is
+    used internally by the AGNO library to determine which Ollama server to connect to.
+    """
     import os
     
     # Set a custom ollama_host in config
@@ -412,5 +418,7 @@ def test_ollama_host_environment_variable_set(test_config, monkeypatch):
                             with patch("builtins.input", side_effect=["1", "quit"]):
                                 main()
                                 
-                                # Verify OLLAMA_HOST environment variable was set
+                                # Verify OLLAMA_HOST environment variable was set to the custom host
+                                # This is the standard way Ollama clients (including AGNO) determine
+                                # which server to connect to
                                 assert os.environ.get("OLLAMA_HOST") == "http://custom-host:5050"

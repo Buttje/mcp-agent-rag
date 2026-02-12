@@ -475,6 +475,8 @@ def main():
 
         # Get Ollama host from config and set as environment variable
         # This ensures AGNO Agent uses the configured Ollama server
+        # Note: OLLAMA_HOST is the standard environment variable used by Ollama clients
+        # This is set globally but is safe because this CLI runs in a single-threaded context
         ollama_host = config.get("ollama_host", "http://localhost:11434")
         os.environ["OLLAMA_HOST"] = ollama_host
         
