@@ -12,7 +12,7 @@ from agno.agent import Agent
 from mcp_agent_rag.config import Config
 from mcp_agent_rag.database import DatabaseManager
 from mcp_agent_rag.rag.ollama_utils import get_model_capabilities
-from mcp_agent_rag.utils import get_logger, setup_logger
+from mcp_agent_rag.utils import get_debug_logger, get_logger, setup_debug_logger, setup_logger
 from mcp_agent_rag.utils.agno_ollama_patch import apply_agno_ollama_patch
 
 
@@ -36,6 +36,10 @@ class Colors:
     BG_RED = "\033[101m"
     BG_GREEN = "\033[102m"
     BG_YELLOW = "\033[103m"
+
+
+# Configuration constants
+CONTEXT_PREVIEW_LENGTH = 150  # Number of characters to show in context preview
 
 
 # Confidence thresholds for color coding
@@ -116,6 +120,9 @@ class MCPClient:
         Returns:
             Tool result as dictionary
         """
+        # Get debug logger once for reuse
+        debug_logger = get_debug_logger()
+        
         self.request_id += 1
         request = {
             "jsonrpc": "2.0",
@@ -123,6 +130,14 @@ class MCPClient:
             "method": "tools/call",
             "params": {"name": tool_name, "arguments": arguments},
         }
+        
+        # Debug logging: log tool call request
+        if debug_logger:
+            debug_logger.log(
+                "mcp.client",
+                f"Calling MCP tool '{tool_name}':",
+                {"tool": tool_name, "arguments": arguments}
+            )
 
         if self.verbose:
             print(f"\n{Colors.BOLD}{Colors.BLUE}🔧 [MCP Tool Call]{Colors.RESET}")
@@ -167,12 +182,33 @@ class MCPClient:
                             result = {"text": text}
                             break
 
+            # Debug logging: log tool call response
+            if debug_logger:
+                # Simplify result for logging (avoid logging full context)
+                log_result = {}
+                if "context" in result:
+                    context = result["context"]
+                    context_preview = context[:CONTEXT_PREVIEW_LENGTH] + "..." if len(context) > CONTEXT_PREVIEW_LENGTH else context
+                    log_result["context_preview"] = context_preview
+                    log_result["context_length"] = len(context)
+                    log_result["citations"] = result.get("citations", [])
+                    log_result["average_confidence"] = result.get("average_confidence")
+                    log_result["databases_searched"] = result.get("databases_searched", [])
+                else:
+                    log_result = result
+                
+                debug_logger.log(
+                    "mcp.client",
+                    f"Received response from MCP tool '{tool_name}':",
+                    log_result
+                )
+            
             if self.verbose:
                 # Show a summary of the result with color coding
                 if "context" in result:
                     context = result["context"]
                     context_len = len(context)
-                    context_preview = context[:150] + "..." if context_len > 150 else context
+                    context_preview = context[:CONTEXT_PREVIEW_LENGTH] + "..." if context_len > CONTEXT_PREVIEW_LENGTH else context
                     
                     avg_conf = result.get("average_confidence")
                     conf_str = ""
@@ -377,6 +413,11 @@ def main():
 
     setup_logger(log_file=log_file, level=config.get("log_level", "INFO"))
     logger = get_logger("mcp-rag-cli")
+    
+    # Setup debug logger if debug is enabled
+    if args.debug:
+        setup_debug_logger(enabled=True)
+        logger.info("Debug logging enabled for MCP client")
 
     print("=" * 70)
     print("MCP-RAG CLI Chat Client")
@@ -582,6 +623,13 @@ def main():
                     print("\nGoodbye!")
                     break
 
+                # Get debug logger once for reuse in this iteration
+                debug_logger = get_debug_logger()
+                
+                # Debug logging: log user prompt
+                if debug_logger:
+                    debug_logger.log_user_prompt(user_input)
+
                 # Process query with agent
                 print()
 
@@ -597,10 +645,20 @@ def main():
 
                     # Print the agent's response
                     if hasattr(response, 'content'):
-                        print(response.content)
+                        response_text = response.content
                     else:
-                        print(str(response))
+                        response_text = str(response)
+                    
+                    print(response_text)
                     print()
+                    
+                    # Debug logging: log agent response
+                    if debug_logger:
+                        debug_logger.log(
+                            "mcp.agent",
+                            "Agent response:",
+                            {"response": response_text}
+                        )
 
                 except Exception as e:
                     logger.error(f"Error running agent: {e}", exc_info=True)
