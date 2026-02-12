@@ -12,7 +12,7 @@ from urllib.parse import parse_qs, urlparse
 from mcp_agent_rag.config import Config
 from mcp_agent_rag.database import DatabaseManager
 from mcp_agent_rag.mcp.agent import AgenticRAG
-from mcp_agent_rag.utils import get_logger
+from mcp_agent_rag.utils import get_debug_logger, get_logger
 
 logger = get_logger(__name__)
 
@@ -139,6 +139,11 @@ class MCPServer:
         Returns:
             JSON-RPC response (or None for notifications)
         """
+        # Debug logging: log incoming request
+        debug_logger = get_debug_logger()
+        if debug_logger:
+            debug_logger.log_json_rpc_request(request)
+        
         try:
             method = request.get("method")
             params = request.get("params", {})
@@ -183,17 +188,29 @@ class MCPServer:
                     request_id, -32601, f"Method not found: {method}"
                 )
 
-            return {
+            response = {
                 "jsonrpc": "2.0",
                 "id": request_id,
                 "result": result,
             }
+            
+            # Debug logging: log outgoing response
+            if debug_logger:
+                debug_logger.log_json_rpc_response(response)
+            
+            return response
 
         except Exception as e:
             logger.error(f"Error handling request: {e}", exc_info=True)
-            return self._error_response(
+            error_response = self._error_response(
                 request.get("id"), -32603, f"Internal error: {str(e)}"
             )
+            
+            # Debug logging: log error response
+            if debug_logger:
+                debug_logger.log_json_rpc_response(error_response)
+            
+            return error_response
 
     def _create_database(self, params: Dict) -> Dict:
         """Handle database-create."""
@@ -322,7 +339,7 @@ class MCPServer:
         # Use agentic RAG to get context from all active databases
         context = self.agent.get_context(prompt, max_results)
 
-        return {
+        result = {
             "prompt": prompt,
             "context": context["text"],
             "citations": context["citations"],
@@ -330,6 +347,16 @@ class MCPServer:
             "average_confidence": context.get("average_confidence", 0.0),
             "min_confidence_threshold": self.agent.min_confidence,
         }
+        
+        # Debug logging: log final response
+        debug_logger = get_debug_logger()
+        if debug_logger:
+            debug_logger.log_final_response(
+                response=context["text"],
+                citations=context["citations"]
+            )
+        
+        return result
 
     def _get_information_for_db(self, params: Dict) -> Dict:
         """Handle getInformationForDB - returns information from specific database.
@@ -435,7 +462,7 @@ class MCPServer:
         context_text = "\n\n".join(context_parts)
         average_confidence = confidence_sum / confidence_count if confidence_count > 0 else 0.0
         
-        return {
+        result = {
             "prompt": prompt,
             "database": database_name,
             "context": context_text,
@@ -443,6 +470,16 @@ class MCPServer:
             "average_confidence": average_confidence,
             "min_confidence_threshold": min_confidence,
         }
+        
+        # Debug logging: log final response
+        debug_logger = get_debug_logger()
+        if debug_logger:
+            debug_logger.log_final_response(
+                response=context_text,
+                citations=citations
+            )
+        
+        return result
 
     def _list_resources(self, params: Dict) -> Dict:
         """Handle resources/list."""
