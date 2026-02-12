@@ -1,6 +1,7 @@
 """Interactive chat CLI with MCP server integration and AGNO agent."""
 
 import json
+import os
 import subprocess
 import sys
 import time
@@ -472,6 +473,16 @@ def main():
         # Create MCP query tool
         query_tool = create_mcp_tool_query_data(mcp_client, verbose=verbose)
 
+        # Get Ollama host from config and set as environment variable
+        # This ensures AGNO Agent uses the configured Ollama server
+        # Note: OLLAMA_HOST is the standard environment variable used by Ollama clients
+        # This is set globally but is safe because this CLI runs in a single-threaded context
+        ollama_host = config.get("ollama_host", "http://localhost:11434")
+        os.environ["OLLAMA_HOST"] = ollama_host
+        
+        if verbose:
+            print(f"Using Ollama host: {ollama_host}")
+
         # Get the generative model from config
         # The config stores the Ollama model name (e.g., "mistral:7b-instruct")
         # We prefix it with "ollama:" to get the AGNO format (e.g., "ollama:mistral:7b-instruct")
@@ -485,7 +496,6 @@ def main():
 
         # Show model capability information in verbose mode
         if verbose:
-            ollama_host = config.get("ollama_host", "http://localhost:11434")
             capabilities, cap_error = get_model_capabilities(generative_model, ollama_host)
             
             has_thinking = "thinking" in capabilities

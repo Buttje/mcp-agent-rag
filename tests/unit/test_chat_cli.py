@@ -376,3 +376,49 @@ def test_start_mcp_server_without_debug_flag(test_config):
             mock_popen.assert_called_once()
             call_args = mock_popen.call_args[0][0]
             assert "--debug" not in call_args
+
+
+def test_ollama_host_environment_variable_set(test_config, monkeypatch):
+    """Test that OLLAMA_HOST environment variable is set from config.
+    
+    This test verifies that the chat CLI correctly sets the OLLAMA_HOST environment
+    variable from the config before initializing the AGNO Agent. The OLLAMA_HOST
+    environment variable is the standard way to configure Ollama clients and is
+    used internally by the AGNO library to determine which Ollama server to connect to.
+    """
+    import os
+    
+    # Set a custom ollama_host in config
+    test_config.set("ollama_host", "http://custom-host:5050")
+    
+    # Clear any existing OLLAMA_HOST env var
+    monkeypatch.delenv("OLLAMA_HOST", raising=False)
+    
+    test_args = ["mcp-rag-cli"]
+    
+    with patch.object(sys, "argv", test_args):
+        with patch("mcp_agent_rag.chat_cli.setup_logger"):
+            # Mock Config to return our test_config
+            with patch("mcp_agent_rag.chat_cli.Config", return_value=test_config):
+                with patch("mcp_agent_rag.chat_cli.DatabaseManager") as MockDBManager:
+                    # Mock database manager to return a test database
+                    mock_db_manager = Mock()
+                    test_db_info = {"test_db": {"doc_count": 5, "description": "Test DB"}}
+                    mock_db_manager.list_databases.return_value = test_db_info
+                    MockDBManager.return_value = mock_db_manager
+                    
+                    # Mock start_mcp_server to avoid starting actual server
+                    with patch("mcp_agent_rag.chat_cli.start_mcp_server") as mock_start_server:
+                        mock_process = Mock()
+                        mock_start_server.return_value = mock_process
+                        
+                        # Mock Agent to avoid needing Ollama
+                        with patch("mcp_agent_rag.chat_cli.Agent") as MockAgent:
+                            # Simulate user selecting database and then quitting
+                            with patch("builtins.input", side_effect=["1", "quit"]):
+                                main()
+                                
+                                # Verify OLLAMA_HOST environment variable was set to the custom host
+                                # This is the standard way Ollama clients (including AGNO) determine
+                                # which server to connect to
+                                assert os.environ.get("OLLAMA_HOST") == "http://custom-host:5050"
