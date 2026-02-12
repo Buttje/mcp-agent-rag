@@ -244,7 +244,7 @@ def start_mcp_server(config: Config, active_databases: list[str], debug: bool = 
         "--transport",
         "stdio",
     ]
-    
+
     # Add debug flag if enabled
     if debug:
         cmd.append("--debug")
