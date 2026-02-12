@@ -311,7 +311,7 @@ class TestCheckAndSetupGPU:
         mock_run.side_effect = [
             Mock(returncode=0, stdout="2.0.0"),  # PyTorch installed
             Mock(returncode=0, stdout="False"),  # CUDA not available
-            FileNotFoundError("[WinError 2] Das System kann die angegebene Datei nicht finden"),
+            FileNotFoundError,  # nvidia-smi not found (Windows: "[WinError 2]")
         ]
 
         # This should not raise an exception
