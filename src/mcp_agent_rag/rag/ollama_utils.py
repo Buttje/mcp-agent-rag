@@ -107,8 +107,11 @@ def get_model_capabilities(model_name: str, host: str = "http://localhost:11434"
                           timeout: int = 10) -> Tuple[List[str], str]:
     """Fetch model capabilities from Ollama server.
     
+    Checks for capabilities in the API response at both root level (newer Ollama versions)
+    and details field (older versions) for maximum compatibility.
+    
     Args:
-        model_name: Name of the model (e.g., "qwen3:30b", "mistral:7b-instruct")
+        model_name: Name of the model (e.g., "qwen3:30b", "qwen3:latest", "mistral:7b-instruct")
         host: Ollama host URL
         timeout: Request timeout in seconds
         
@@ -133,9 +136,17 @@ def get_model_capabilities(model_name: str, host: str = "http://localhost:11434"
         data = response.json()
         
         # Extract capabilities from model info
-        # The capabilities are in the "details" -> "capabilities" field
+        # Capabilities can be at root level (newer Ollama versions)
+        # or in details field (older versions or alternative format)
         capabilities = []
-        if "details" in data and isinstance(data["details"], dict):
+        
+        # First check root level (most common in newer Ollama versions)
+        if "capabilities" in data:
+            caps = data["capabilities"]
+            if isinstance(caps, list):
+                capabilities = caps
+        # Fall back to details field for backward compatibility
+        elif "details" in data and isinstance(data["details"], dict):
             if "capabilities" in data["details"]:
                 caps = data["details"]["capabilities"]
                 if isinstance(caps, list):

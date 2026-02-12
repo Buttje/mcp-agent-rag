@@ -254,6 +254,53 @@ def test_get_model_capabilities_no_thinking(mock_post):
 
 
 @patch("mcp_agent_rag.rag.ollama_utils.requests.post")
+def test_get_model_capabilities_root_level(mock_post):
+    """Test model with capabilities at root level (newer Ollama format)."""
+    mock_response = Mock()
+    mock_response.status_code = 200
+    mock_response.json.return_value = {
+        "capabilities": ["completion", "tools", "thinking"],
+        "details": {
+            "family": "qwen3",
+            "parameter_size": "8.2B"
+        }
+    }
+    mock_post.return_value = mock_response
+
+    capabilities, error = get_model_capabilities("qwen3:latest")
+    
+    assert error == ""
+    assert len(capabilities) == 3
+    assert "completion" in capabilities
+    assert "tools" in capabilities
+    assert "thinking" in capabilities
+    mock_post.assert_called_once()
+
+
+@patch("mcp_agent_rag.rag.ollama_utils.requests.post")
+def test_get_model_capabilities_root_level_no_thinking(mock_post):
+    """Test model with capabilities at root level but without thinking."""
+    mock_response = Mock()
+    mock_response.status_code = 200
+    mock_response.json.return_value = {
+        "capabilities": ["completion", "tools"],
+        "details": {
+            "family": "mistral"
+        }
+    }
+    mock_post.return_value = mock_response
+
+    capabilities, error = get_model_capabilities("mistral:latest")
+    
+    assert error == ""
+    assert len(capabilities) == 2
+    assert "completion" in capabilities
+    assert "tools" in capabilities
+    assert "thinking" not in capabilities
+
+
+
+@patch("mcp_agent_rag.rag.ollama_utils.requests.post")
 def test_get_model_capabilities_timeout(mock_post):
     """Test model capabilities fetch with timeout."""
     mock_post.side_effect = requests.exceptions.Timeout()
