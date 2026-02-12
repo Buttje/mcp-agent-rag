@@ -305,3 +305,74 @@ def test_chat_cli_main_with_verbose_flag(test_config, capsys):
                             MockAgent.assert_called_once()
                             call_kwargs = MockAgent.call_args[1]
                             assert call_kwargs.get("debug_mode") is True
+
+
+def test_chat_cli_main_with_debug_flag(test_config, capsys):
+    """Test chat CLI main with --debug flag."""
+    test_args = ["mcp-rag-cli", "--debug"]
+
+    with patch.object(sys, "argv", test_args):
+        with patch("mcp_agent_rag.chat_cli.setup_logger"):
+            with patch("mcp_agent_rag.chat_cli.DatabaseManager") as MockDBManager:
+                # Mock database manager to return a test database
+                mock_db_manager = Mock()
+                test_db_info = {"test_db": {"doc_count": 5, "description": "Test DB"}}
+                mock_db_manager.list_databases.return_value = test_db_info
+                MockDBManager.return_value = mock_db_manager
+
+                # Mock start_mcp_server to avoid starting actual server
+                with patch("mcp_agent_rag.chat_cli.start_mcp_server") as mock_start_server:
+                    mock_process = Mock()
+                    mock_start_server.return_value = mock_process
+
+                    # Mock Agent to avoid needing Ollama
+                    with patch("mcp_agent_rag.chat_cli.Agent") as MockAgent:
+                        # Simulate user selecting database and then quitting
+                        with patch("builtins.input", side_effect=["1", "quit"]):
+                            main()
+
+                            # Verify start_mcp_server was called with debug=True
+                            mock_start_server.assert_called_once()
+                            call_args = mock_start_server.call_args
+                            assert call_args[1].get("debug") is True
+
+                            # Verify MCPClient was created with verbose=True (debug implies verbose)
+                            captured = capsys.readouterr()
+                            assert "🔍 Verbose mode enabled" in captured.out
+
+                            # Verify Agent was created with debug_mode=True
+                            MockAgent.assert_called_once()
+                            call_kwargs = MockAgent.call_args[1]
+                            assert call_kwargs.get("debug_mode") is True
+
+
+def test_start_mcp_server_with_debug_flag(test_config):
+    """Test start_mcp_server includes --debug flag when debug=True."""
+    with patch("mcp_agent_rag.chat_cli.subprocess.Popen") as mock_popen:
+        mock_process = Mock()
+        mock_process.poll.return_value = None
+        mock_popen.return_value = mock_process
+
+        with patch("mcp_agent_rag.chat_cli.time.sleep"):
+            start_mcp_server(test_config, ["test_db"], debug=True)
+
+            # Verify Popen was called with --debug in the command
+            mock_popen.assert_called_once()
+            call_args = mock_popen.call_args[0][0]
+            assert "--debug" in call_args
+
+
+def test_start_mcp_server_without_debug_flag(test_config):
+    """Test start_mcp_server does not include --debug flag when debug=False."""
+    with patch("mcp_agent_rag.chat_cli.subprocess.Popen") as mock_popen:
+        mock_process = Mock()
+        mock_process.poll.return_value = None
+        mock_popen.return_value = mock_process
+
+        with patch("mcp_agent_rag.chat_cli.time.sleep"):
+            start_mcp_server(test_config, ["test_db"], debug=False)
+
+            # Verify Popen was called without --debug in the command
+            mock_popen.assert_called_once()
+            call_args = mock_popen.call_args[0][0]
+            assert "--debug" not in call_args
